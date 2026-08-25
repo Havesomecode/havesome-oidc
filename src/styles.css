@@ -2100,7 +2100,9 @@ kbd {
   /* Portable reference surface: aliases only, never a second visual system. */
   --cheat-paper: var(--surface);
   --cheat-ink: var(--fg);
+  --cheat-copy: var(--muted);
   --cheat-blue: var(--accent);
+  --cheat-blue-on: var(--accent-on);
   --cheat-blue-soft: var(--accent-soft);
   --cheat-rule: var(--border);
   --cheat-coral: var(--error);
@@ -2125,7 +2127,7 @@ kbd {
 .cheat-sheet-heading p {
   max-width: 700px;
   margin: 0;
-  color: var(--muted);
+  color: var(--cheat-copy);
   font-size: 15px;
   line-height: 1.5;
 }
@@ -2137,8 +2139,8 @@ kbd {
   gap: 12px;
   padding: 0 18px;
   border: 2px solid var(--cheat-ink);
-  background: var(--accent);
-  color: var(--accent-on);
+  background: var(--cheat-blue);
+  color: var(--cheat-blue-on);
   text-decoration: none;
   font-weight: 800;
 }
@@ -2173,7 +2175,7 @@ kbd {
   min-width: 34px;
   padding: 6px 5px;
   background: var(--cheat-blue);
-  color: white;
+  color: var(--cheat-blue-on);
   text-align: center;
   font: 800 10px/1 var(--mono);
   letter-spacing: 0.06em;
@@ -2258,7 +2260,7 @@ kbd {
 }
 .cheat-flow p {
   margin: 3px 0 0;
-  color: #365b75;
+  color: var(--cheat-copy);
   font-size: 11px;
   line-height: 1.4;
 }
@@ -2268,7 +2270,7 @@ kbd {
   padding: 10px 12px;
   border-left: 4px solid var(--cheat-coral);
   background: var(--cheat-coral-soft);
-  color: #713027;
+  color: var(--cheat-coral);
   font-size: 12px;
   line-height: 1.4;
 }
@@ -2278,7 +2280,7 @@ kbd {
   padding: 10px 12px;
   border-top: 1px solid var(--cheat-rule);
   background: var(--cheat-blue-soft);
-  color: #365b75;
+  color: var(--cheat-copy);
   font-size: 11px;
   line-height: 1.45;
 }
@@ -2293,7 +2295,7 @@ kbd {
   color: var(--cheat-blue);
 }
 .cheat-checks span {
-  color: #365b75;
+  color: var(--cheat-copy);
   font-size: 11px;
   line-height: 1.4;
 }
@@ -2305,7 +2307,7 @@ kbd {
 .cheat-trouble-table th {
   padding: 7px 8px;
   background: var(--cheat-blue);
-  color: white;
+  color: var(--cheat-blue-on);
   text-align: left;
   font: 800 9px/1.2 var(--mono);
   letter-spacing: 0.04em;
@@ -2314,7 +2316,7 @@ kbd {
 .cheat-trouble-table td {
   padding: 8px;
   border-top: 1px solid var(--cheat-rule);
-  color: #365b75;
+  color: var(--cheat-copy);
   font-size: 9.5px;
   line-height: 1.35;
   vertical-align: top;
@@ -2339,7 +2341,7 @@ kbd {
   display: flex;
   justify-content: flex-end;
   padding-top: 14px;
-  color: #365b75;
+  color: var(--cheat-copy);
   font: 700 9px/1.4 var(--mono);
   letter-spacing: 0.04em;
   text-transform: uppercase;
