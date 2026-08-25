@@ -248,6 +248,12 @@ Depth comes from tonal layers, 1px rules, and inset measurement ticks. The base 
 - Level 2: `0 12px 32px oklch(22% 0.02 240 / 0.18)` for drawers and dragged actors.
 - Compromised: no extra elevation; use a two-line border plus diagonal pattern so danger does not appear more clickable.
 
+### Portable reference surfaces
+
+Downloadable and print references are a compact projection of the same workbench language, not a separate editorial theme. They alias the normative `surface`, `fg`, `border`, `accent`, `accent-soft`, `error`, and `error-soft` roles; print pins those aliases to the light semantic mapping for dependable paper contrast. Reference hierarchy comes from rules, spacing, type weight, and semantic fills. It stays at Level 0: no decorative drop shadow, floating-card treatment, or independent paper/ink/accent palette.
+
+One-page references preserve the document heading sequence and DOM reading order in tagged output. Body and evidence text print at 8pt or larger; provenance-only footer metadata may use 7.25pt. Generated PDFs require a title, language, structure tree, single-page assertion, logical text extraction check, and parser-backed typography guard before release.
+
 ## Shapes
 
 ### Protocol entities

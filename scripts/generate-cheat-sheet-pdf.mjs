@@ -15,6 +15,9 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   await page.goto('http://127.0.0.1:4178/', { waitUntil: 'networkidle' });
   await page.getByRole('heading', { name: 'OIDC field cheat sheet' }).waitFor();
+  await page.evaluate(() => {
+    document.title = 'OIDC field cheat sheet — Protocol Workbench';
+  });
   await page.emulateMedia({ media: 'print', colorScheme: 'light', reducedMotion: 'reduce' });
   await page.pdf({
     path: output,
@@ -22,6 +25,8 @@ try {
     landscape: true,
     printBackground: true,
     preferCSSPageSize: true,
+    tagged: true,
+    outline: true,
   });
 
   const signature = (await readFile(output)).subarray(0, 5).toString('ascii');
