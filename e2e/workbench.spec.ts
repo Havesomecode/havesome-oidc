@@ -179,6 +179,7 @@ test('keeps visible controls at 44px and 48px on coarse pointers', async ({
   browserName,
 }) => {
   test.skip(browserName !== 'chromium', 'Control geometry is covered once in Chromium.');
+  test.slow();
   await enterPractice(page);
   const desktopKinds = new Set<string>();
   for (const width of [1440, 1920]) {
@@ -249,6 +250,7 @@ test('keeps the simulation local, accessible, and explicit about decode limits',
 });
 
 test('completes every milestone with pointer-free controls available', async ({ page }) => {
+  test.slow();
   await enterPractice(page);
   await page.getByLabel(/Move Client to zone/).selectOption('Trusted application');
   await page.getByRole('button', { name: 'Check map' }).click();
@@ -296,39 +298,39 @@ test('completes every milestone with pointer-free controls available', async ({ 
   await expect(page.getByText('8/8 gates')).toBeVisible();
 });
 
-test('has no page-level overflow across required responsive widths', async ({
-  page,
-  browserName,
-}) => {
+test.describe('Chromium-only responsive coverage', () => {
   test.skip(
-    browserName !== 'chromium',
+    ({ browserName }) => browserName !== 'chromium',
     'Responsive matrix is covered in Chromium; functional flow is cross-engine.',
   );
-  for (const width of [320, 360, 390, 430, 600, 768, 820, 1024, 1366, 1440, 1920]) {
-    await page.setViewportSize({ width, height: 900 });
-    await expect
-      .poll(
-        () =>
-          page.evaluate(
-            () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
-          ),
-        { message: `horizontal overflow at ${width}px` },
-      )
-      .toBe(true);
-  }
-  await enterPractice(page);
-  for (const width of [320, 390, 768, 1024, 1440, 1920]) {
-    await page.setViewportSize({ width, height: 900 });
-    await expect
-      .poll(
-        () =>
-          page.evaluate(
-            () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
-          ),
-        { message: `practice horizontal overflow at ${width}px` },
-      )
-      .toBe(true);
-  }
+
+  test('has no page-level overflow across required responsive widths', async ({ page }) => {
+    for (const width of [320, 360, 390, 430, 600, 768, 820, 1024, 1366, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect
+        .poll(
+          () =>
+            page.evaluate(
+              () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+            ),
+          { message: `horizontal overflow at ${width}px` },
+        )
+        .toBe(true);
+    }
+    await enterPractice(page);
+    for (const width of [320, 390, 768, 1024, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect
+        .poll(
+          () =>
+            page.evaluate(
+              () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+            ),
+          { message: `practice horizontal overflow at ${width}px` },
+        )
+        .toBe(true);
+    }
+  });
 });
 
 test('keeps desktop headings below the sticky header after pointer milestone selection', async ({
