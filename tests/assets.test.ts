@@ -16,6 +16,17 @@ describe('static asset closure', () => {
       ).toBe(true);
     }
   });
+
+  it('ships the linked one-page cheat sheet as a cached PDF asset', () => {
+    const pdfPath = resolve('public', 'oidc-field-cheat-sheet.pdf');
+    const serviceWorker = readFileSync(resolve('public', 'sw.js'), 'utf8');
+
+    expect(existsSync(pdfPath)).toBe(true);
+    const pdf = readFileSync(pdfPath);
+    expect(pdf.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+    expect(pdf.toString('latin1').match(/\/Type\s*\/Page(?!s)/g)).toHaveLength(1);
+    expect(serviceWorker).toContain("'./oidc-field-cheat-sheet.pdf'");
+  });
 });
 
 describe('contrast-safe motion', () => {

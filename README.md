@@ -24,6 +24,10 @@ npx playwright install chromium firefox webkit
 npm run test:e2e
 ```
 
+The field cheat sheet is rendered from the guide itself. After changing its content or print styles,
+regenerate the committed download with `npm run cheatsheet:pdf` and verify that it remains one A4
+landscape page.
+
 `npm run build` creates `dist/`, a route-safe `404.html`, `.nojekyll`, manifest, and offline shell. GitHub Actions verifies the candidate before uploading the Pages artifact. It does not use secrets or real OAuth credentials.
 
 ## Learning targets

@@ -11,6 +11,7 @@ import {
   encodeSyntheticJwt,
   validateDiscovery,
 } from './protocol';
+import { CheatSheet } from './CheatSheet';
 import './styles.css';
 
 type MilestoneId = `M${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7}`;
@@ -1583,7 +1584,7 @@ function GuidedLearning({
     <main id="main" className="guide" tabIndex={-1}>
       <section className="guide-hero" aria-labelledby="guide-title">
         <div>
-          <span className="eyebrow">GUIDED OIDC ORIENTATION · 5 SHORT STOPS</span>
+          <span className="eyebrow">GUIDED OIDC ORIENTATION · 6 SHORT STOPS</span>
           <h1 id="guide-title">Understand OIDC before you wire it</h1>
           <p>
             Follow one browser trip from request to callback, learn what must match, then repair the
@@ -1597,6 +1598,9 @@ function GuidedLearning({
               Jump to PKCE practice
             </button>
           </div>
+          <a className="guide-resource-link" href="#guide-cheat-sheet">
+            Open the OIDC field cheat sheet <span>One-page PDF included →</span>
+          </a>
         </div>
         <aside className="guide-safety" aria-label="Learning environment safety boundary">
           <span className="status-dot" aria-hidden="true" />
@@ -1609,12 +1613,14 @@ function GuidedLearning({
       </section>
 
       <nav className="journey-map" aria-label="Guided learning sections">
-        {['Understand', 'Watch', 'Diagnose', 'Troubleshoot', 'Practice'].map((label, index) => (
-          <a key={label} href={`#guide-${label.toLowerCase()}`}>
-            <span>{String(index + 1).padStart(2, '0')}</span>
-            {label}
-          </a>
-        ))}
+        {['Understand', 'Watch', 'Diagnose', 'Troubleshoot', 'Cheat sheet', 'Practice'].map(
+          (label, index) => (
+            <a key={label} href={`#guide-${label.toLowerCase().replace(' ', '-')}`}>
+              <span>{String(index + 1).padStart(2, '0')}</span>
+              {label}
+            </a>
+          ),
+        )}
       </nav>
 
       <section id="guide-understand" className="guide-section understand-section">
@@ -1945,9 +1951,11 @@ function GuidedLearning({
         </div>
       </section>
 
+      <CheatSheet />
+
       <section id="guide-practice" className="guide-section practice-callout">
         <div>
-          <span className="eyebrow">05 · PRACTICE</span>
+          <span className="eyebrow">06 · PRACTICE</span>
           <h2>Build the trace yourself</h2>
           <p>Eight local milestones turn the model into protocol and security checks.</p>
         </div>

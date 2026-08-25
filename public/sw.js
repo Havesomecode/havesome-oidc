@@ -1,5 +1,5 @@
-const CACHE = 'protocol-workbench-v2';
-const SHELL = ['./', './index.html', './manifest.webmanifest'];
+const CACHE = 'protocol-workbench-v3';
+const SHELL = ['./', './index.html', './manifest.webmanifest', './oidc-field-cheat-sheet.pdf'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));

@@ -15,6 +15,7 @@
     "format": "prettier --check .",
     "format:write": "prettier --write .",
     "design:lint": "npx -y @google/design.md lint DESIGN.md",
+    "cheatsheet:pdf": "node scripts/generate-cheat-sheet-pdf.mjs",
     "build": "tsc --noEmit && vite build && node scripts/postbuild.mjs",
     "check": "npm run test && npm run lint && npm run typecheck && npm run format && npm run design:lint && npm run build"
   },

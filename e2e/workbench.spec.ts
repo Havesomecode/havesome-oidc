@@ -82,6 +82,30 @@ test('orients a first-time learner before practice on desktop', async ({ page })
   await expect(page.getByRole('button', { name: 'Enter practice lab' })).toBeVisible();
 });
 
+test('makes the field cheat sheet easy to reach and download', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const shortcut = page.getByRole('link', { name: /open the oidc field cheat sheet/i });
+  await expect(shortcut).toBeVisible();
+  await shortcut.click();
+
+  await expect(page.getByRole('heading', { name: 'OIDC field cheat sheet' })).toBeInViewport();
+  const mobileGeometry = await page.evaluate(() => ({
+    headingTop: document.querySelector('#cheat-sheet-title')!.getBoundingClientRect().top,
+    navigationBottom: document.querySelector('.journey-map')!.getBoundingClientRect().bottom,
+    sheetWidth: document.querySelector('.cheat-sheet-section')!.scrollWidth,
+    viewportWidth: document.documentElement.clientWidth,
+  }));
+  expect(mobileGeometry.headingTop).toBeGreaterThanOrEqual(mobileGeometry.navigationBottom);
+  expect(mobileGeometry.sheetWidth).toBeLessThanOrEqual(mobileGeometry.viewportWidth);
+  const download = page.getByRole('link', { name: /download.*pdf/i });
+  await expect(download).toHaveAttribute('download', 'oidc-field-cheat-sheet.pdf');
+
+  const response = await page.request.get('./oidc-field-cheat-sheet.pdf');
+  expect(response.ok()).toBe(true);
+  expect(response.headers()['content-type']).toContain('application/pdf');
+  expect((await response.body()).subarray(0, 5).toString('ascii')).toBe('%PDF-');
+});
+
 test('supports scenario keyboard controls and resets the workflow', async ({ page }) => {
   const server = page.getByRole('tab', { name: 'Server web app' });
   await server.focus();

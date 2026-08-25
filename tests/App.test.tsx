@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { App } from '../src/App';
 
@@ -18,6 +18,38 @@ describe('Protocol Workbench', () => {
     expect(screen.getByRole('heading', { name: /redirect uri lens/i })).toBeVisible();
     expect(screen.getByRole('heading', { name: /troubleshoot from the trace/i })).toBeVisible();
     expect(screen.getByRole('button', { name: /enter practice lab/i })).toBeVisible();
+  });
+
+  it('offers a field cheat sheet that covers the complete OIDC debugging path', () => {
+    render(<App />);
+
+    expect(screen.getByRole('heading', { name: /oidc field cheat sheet/i })).toBeVisible();
+    expect(screen.getByRole('region', { name: /what each part is/i })).toHaveTextContent(
+      /oauth 2\.0.*openid connect.*authorization server.*resource server.*refresh token/i,
+    );
+    const flow = screen.getByRole('region', { name: /authorization code.*pkce flow/i });
+    expect(flow).toHaveTextContent(/authorize.*callback.*token endpoint.*resource api/i);
+    expect(flow).toHaveTextContent(/register.*exact.*native.*loopback redirects.*loopback port/i);
+    expect(screen.getByRole('region', { name: /id token validation/i })).toHaveTextContent(
+      /signature.*issuer.*audience.*expiry.*nonce.*state.*authorization response.*nonce.*id token/i,
+    );
+    const troubleshooting = screen.getByRole('region', { name: /troubleshooting order/i });
+    expect(troubleshooting).toHaveTextContent(
+      /redirect_uri_mismatch.*state.*nonce.*cookie.*issuer.*audience/i,
+    );
+    const table = within(troubleshooting).getByRole('table', {
+      name: /symptom to next-check troubleshooting sequence/i,
+    });
+    expect(
+      within(table)
+        .getAllByRole('columnheader')
+        .map((header) => header.textContent),
+    ).toEqual(['Symptom', 'Trace', 'Invariant', 'Next check']);
+    expect(screen.getByRole('link', { name: /download.*pdf/i })).toHaveAttribute(
+      'href',
+      './oidc-field-cheat-sheet.pdf',
+    );
+    expect(screen.getByText('06 · PRACTICE')).toBeVisible();
   });
 
   it('switches scenario workflows and exposes learner-controlled steps', async () => {
