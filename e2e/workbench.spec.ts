@@ -4,6 +4,45 @@ import { expect, test } from '@playwright/test';
 const milestone = (page: import('@playwright/test').Page, id: string) =>
   page.getByRole('button', { name: new RegExp(`^${id}`) });
 
+const emulateStickyHeaderFocusScroll = (page: import('@playwright/test').Page) =>
+  page.evaluate(() => {
+    // Normalize the reviewed 53px focus scroll so the geometry regression is engine-stable.
+    const nativeFocus = HTMLElement.prototype.focus;
+    HTMLElement.prototype.focus = function focus(options?: FocusOptions) {
+      nativeFocus.call(this, options);
+      if (this.id === 'main' && !options?.preventScroll) window.scrollTo(0, 53);
+    };
+  });
+
+const emulateMobileFocusScroll = (page: import('@playwright/test').Page) =>
+  page.evaluate(() => {
+    const nativeFocus = HTMLElement.prototype.focus;
+    HTMLElement.prototype.focus = function focus(options?: FocusOptions) {
+      nativeFocus.call(this, options);
+      if (this.id === 'main' && !options?.preventScroll) this.scrollIntoView();
+    };
+  });
+
+const expectDesktopHeadingsBelowHeader = async (page: import('@playwright/test').Page) => {
+  const geometry = await page.evaluate(() => ({
+    headerBottom: document.querySelector('.product-header')!.getBoundingClientRect().bottom,
+    taskTop: document.querySelector('.task-header')!.getBoundingClientRect().top,
+    railTop: document.querySelector('.rail-heading')!.getBoundingClientRect().top,
+    inspectorTop: document.querySelector('.inspector')!.getBoundingClientRect().top,
+  }));
+
+  expect(geometry.taskTop, 'task heading clears the sticky header').toBeGreaterThanOrEqual(
+    geometry.headerBottom,
+  );
+  expect(geometry.railTop, 'rail heading clears the sticky header').toBeGreaterThanOrEqual(
+    geometry.headerBottom,
+  );
+  expect(
+    geometry.inspectorTop,
+    'inspector heading clears the sticky header',
+  ).toBeGreaterThanOrEqual(geometry.headerBottom);
+};
+
 test.beforeEach(async ({ page }) => {
   await page.goto('./');
   await page.evaluate(() => localStorage.clear());
@@ -90,6 +129,54 @@ test('has no page-level overflow across required responsive widths', async ({
       .toBe(true);
   }
 });
+
+test('keeps desktop headings below the sticky header after pointer milestone selection', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await emulateStickyHeaderFocusScroll(page);
+  await milestone(page, 'M5').click();
+
+  await expect(page.getByRole('heading', { name: 'Threat arcade', level: 1 })).toBeVisible();
+  await expect(page.locator('#main')).toBeFocused();
+  await expectDesktopHeadingsBelowHeader(page);
+});
+
+test('keeps desktop headings below the sticky header after keyboard milestone selection', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await emulateStickyHeaderFocusScroll(page);
+  await milestone(page, 'M5').focus();
+  await page.keyboard.press('Enter');
+
+  await expect(page.getByRole('heading', { name: 'Threat arcade', level: 1 })).toBeVisible();
+  await expect(page.locator('#main')).toBeFocused();
+  await expectDesktopHeadingsBelowHeader(page);
+});
+
+for (const width of [390, 320]) {
+  test(`keeps the focused task visible after mobile milestone selection at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await emulateMobileFocusScroll(page);
+    await milestone(page, 'M5').click();
+    await page.evaluate(() => window.scrollTo(0, 1000));
+
+    const target = milestone(page, 'M4');
+    if (width === 390) await target.click();
+    else {
+      await target.focus();
+      await page.keyboard.press('Enter');
+    }
+
+    await expect(page.locator('#main')).toBeFocused();
+    await expect(
+      page.getByRole('heading', { name: 'OIDC identity lab', level: 1 }),
+    ).toBeInViewport();
+  });
+}
 
 test('preserves state and focus with reduced motion', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });

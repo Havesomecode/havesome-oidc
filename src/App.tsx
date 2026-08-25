@@ -1387,7 +1387,12 @@ export function App() {
   const selectMilestone = (id: MilestoneId) => {
     setActive(id);
     setAnnouncement(`${id} selected. ${MILESTONES.find((item) => item.id === id)?.prompt}`);
-    requestAnimationFrame(() => mainRef.current?.focus());
+    requestAnimationFrame(() => {
+      const main = mainRef.current;
+      if (!main) return;
+      if (window.innerWidth >= 900) main.focus({ preventScroll: true });
+      else main.focus();
+    });
   };
   return (
     <div className="app-shell">
