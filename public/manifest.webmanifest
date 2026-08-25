@@ -1,0 +1,13 @@
+{
+  "name": "Protocol Workbench",
+  "short_name": "OIDC Workbench",
+  "description": "Local interactive OAuth 2.0 and OpenID Connect protocol simulations.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f8f9fa",
+  "theme_color": "#22272d",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

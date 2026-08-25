@@ -1,0 +1,106 @@
+{
+  "schema_version": "1.0",
+  "created_at": "2026-08-25T05:25:00+02:00",
+  "open_design": {
+    "external_plugin_id": "open-design",
+    "external_plugin_version": "0.5.3",
+    "distribution_mechanism": "git_marketplace",
+    "publisher_class": "open_design_first_party",
+    "daemon_version": null,
+    "daemon_version_note": "The local Open Design daemon did not expose a product version in the run or artifact result."
+  },
+  "project": {
+    "id": "oauth2-oidc-protocol-workbench-20260825-409df0d6",
+    "name": "OAuth2/OIDC Protocol Workbench — 2026-08-25"
+  },
+  "run": {
+    "id": "6001c62e-1bb3-4e81-ae44-e092071af06f",
+    "conversation_id": "5a94feab-ba49-4126-aed8-91cafabdde18",
+    "status": "succeeded",
+    "exit_code": 0,
+    "ended_with_unfinished_work": false,
+    "execution_lane": "Local Codex",
+    "agent_product": "Codex CLI",
+    "agent_version": "codex-cli 0.146.0",
+    "incremental_cost_eur": 0
+  },
+  "bounded_purpose": "Create, before any application implementation, a comprehensive product-UI design contract and visually reviewable protocol-workbench board for a GitHub-hosted, local-only interactive OAuth 2.0 and OpenID Connect learning site. Define foundations, components, protocol visual grammar, eight hands-on modules, milestone progression, all interaction states, responsive/touch/keyboard/reduced-motion behavior, accessibility, no-essay copy rules, synthetic fixtures, security feedback, and testable acceptance criteria. Do not create application source, packages, tests, workflows, screenshots, deployments, pushes, or publications; never present token decoding as signature verification.",
+  "source_identity": {
+    "artifact_ref": {
+      "project_id": "oauth2-oidc-protocol-workbench-20260825-409df0d6",
+      "entry_file": "protocol-workbench-board.html"
+    },
+    "files": [
+      {
+        "path": "DESIGN.md",
+        "sha256": "358c614ea0c2a0203f8daa768ebf686a90c64f3d5bd296672cb4988ee2f884ed",
+        "bytes": 15568
+      },
+      {
+        "path": "OPEN_DESIGN_BRIEF.md",
+        "sha256": "a63b88a9fca8d9c825ef55704a25916147cddfb211e48c4b7d09d7470133103e",
+        "bytes": 31062
+      },
+      {
+        "path": "protocol-workbench-board.html",
+        "sha256": "718062d4f341474e817bd96eeb54c0fde1d54e758a62b6f77e2131032f0d9b30",
+        "bytes": 53858
+      }
+    ],
+    "recovery": "Open the named Open Design project, select conversation 5a94feab-ba49-4126-aed8-91cafabdde18 or run 6001c62e-1bb3-4e81-ae44-e092071af06f, and retrieve the complete artifact whose entry file is protocol-workbench-board.html."
+  },
+  "repository_artifacts": [
+    {
+      "path": "DESIGN.md",
+      "sha256": "2f771a248cea0bec19496eeb13febef6900f6a2c47fdbd8a0244621f0d71f7b5",
+      "bytes": 15810,
+      "derived_from": "Open Design project DESIGN.md; locally corrected only to satisfy the design.md alpha token schema and remove all reported contrast warnings."
+    },
+    {
+      "path": "OPEN_DESIGN_BRIEF.md",
+      "sha256": "2cd011a1ee410b526d94333bd1c9f447ad96f21c867fe18279938d3965e6579c",
+      "bytes": 31902,
+      "derived_from": "Open Design project OPEN_DESIGN_BRIEF.md; locally appended with the required final lint outcome."
+    },
+    {
+      "path": "OPEN_DESIGN_PROVENANCE.json",
+      "sha256": null,
+      "hash_note": "A self-hash is intentionally omitted to avoid a recursive value; this file is identified by repository path plus the project, run, conversation, source hashes, and sibling artifact hashes recorded here."
+    }
+  ],
+  "lint": {
+    "command": "npx -y @google/design.md lint DESIGN.md",
+    "final_exit_code": 0,
+    "errors": 0,
+    "warnings": 0,
+    "infos": 1,
+    "cache_override": "NPM_CONFIG_CACHE=/tmp/havesome-oidc-npm-cache"
+  },
+  "failures_and_substitutions": [
+    {
+      "stage": "prior_brief_confirmation",
+      "outcome": "failed",
+      "detail": "The earlier interactive brief expired before confirmation. It created no project, run, or repository files. The user explicitly authorized exactly one fresh skipped brief workflow."
+    },
+    {
+      "stage": "skipped_brief_defaults",
+      "outcome": "substituted",
+      "detail": "With skip:true, Open Design's empty question form confirmed generic built-in defaults of Product UI, Evolve an existing brand, and Foundations + core components. This conflicted with the authoritative contract. The single Local Codex run prompt therefore explicitly enforced Product UI, Start fresh, and Comprehensive; no second brief workflow was created."
+    },
+    {
+      "stage": "studio_open",
+      "outcome": "unavailable",
+      "detail": "No callable in-app browser was available, so the live Studio URL could not be opened automatically. The Open Design run completed successfully and returned both Studio and preview URLs."
+    },
+    {
+      "stage": "initial_lint_invocation",
+      "outcome": "failed_then_recovered",
+      "detail": "The user npm cache contains root-owned entries and returned EPERM before linting. The command was rerun with an isolated temporary npm cache; global ownership and repository configuration were not changed."
+    },
+    {
+      "stage": "lint_corrections",
+      "outcome": "corrected",
+      "detail": "The Open Design source parsed with no errors but reported unsupported component sub-token warnings, orphan references, and contrast warnings. The repository DESIGN.md was corrected to alpha-spec-supported component keys and contrast-safe accent/warning roles. Final lint reported zero errors and zero warnings."
+    }
+  ]
+}
