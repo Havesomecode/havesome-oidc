@@ -154,6 +154,250 @@ const SYNTHETIC_ID_TOKEN = encodeSyntheticJwt({
   token_use: 'id',
 });
 
+type ScenarioId = 'server' | 'spa' | 'native' | 'oauth';
+
+type GuideScenario = {
+  id: ScenarioId;
+  label: string;
+  useWhen: string;
+  actors: string[];
+  redirect: string;
+  tokenResult: string;
+  steps: Array<{ title: string; route: string; detail: string }>;
+};
+
+const GUIDE_SCENARIOS: GuideScenario[] = [
+  {
+    id: 'server',
+    label: 'Server web app',
+    useWhen: 'Use this when your server can keep a session and handle the code exchange.',
+    actors: ['Person', 'Browser', 'Web server', 'OpenID Provider', 'Notes API'],
+    redirect: 'https://client.local/callback',
+    tokenResult: 'ID token → server session · access token → API',
+    steps: [
+      {
+        title: 'Create the transaction',
+        route: 'Web server → Browser',
+        detail: 'The client stores state and nonce, then creates a PKCE S256 challenge.',
+      },
+      {
+        title: 'Send the authorization request',
+        route: 'Browser → OpenID Provider',
+        detail: 'The browser carries redirect_uri, scope, state, nonce, and the PKCE challenge.',
+      },
+      {
+        title: 'Authenticate and approve',
+        route: 'Person ↔ OpenID Provider',
+        detail: 'The provider authenticates the person and asks for consent when needed.',
+      },
+      {
+        title: 'Return one code',
+        route: 'OpenID Provider → Browser → callback',
+        detail: 'The client accepts the callback only when its stored state matches.',
+      },
+      {
+        title: 'Redeem and validate',
+        route: 'Web server ↔ token endpoint',
+        detail: 'The server sends the one-time code and verifier, then validates the ID token.',
+      },
+    ],
+  },
+  {
+    id: 'spa',
+    label: 'Browser SPA',
+    useWhen: 'Use this for browser JavaScript with no confidential client secret.',
+    actors: ['Person', 'Browser SPA', 'OpenID Provider', 'Notes API'],
+    redirect: 'https://spa.local/auth/callback',
+    tokenResult: 'ID token → SPA session · access token → API',
+    steps: [
+      {
+        title: 'Start in the browser',
+        route: 'SPA → Browser storage',
+        detail: 'The SPA creates state, nonce, and a fresh PKCE verifier without a client secret.',
+      },
+      {
+        title: 'Navigate to authorization',
+        route: 'Browser → OpenID Provider',
+        detail: 'A full-page redirect crosses the browser boundary; PKCE S256 protects the code.',
+      },
+      {
+        title: 'Authenticate and approve',
+        route: 'Person ↔ OpenID Provider',
+        detail: 'The provider, not the SPA, collects the person’s credentials.',
+      },
+      {
+        title: 'Return to the SPA route',
+        route: 'OpenID Provider → Browser SPA',
+        detail: 'The SPA checks state before treating the response as its transaction.',
+      },
+      {
+        title: 'Redeem with PKCE',
+        route: 'Browser SPA ↔ token endpoint',
+        detail: 'The token endpoint verifies the code and verifier; CORS must allow the origin.',
+      },
+    ],
+  },
+  {
+    id: 'native',
+    label: 'Native app',
+    useWhen: 'Use the system user agent so the native app never collects provider credentials.',
+    actors: ['Person', 'Native app', 'External browser', 'OpenID Provider', 'Mobile API'],
+    redirect: 'https://app.example.com/oauth/callback',
+    tokenResult: 'ID token → app session · access token → API',
+    steps: [
+      {
+        title: 'Open the system browser',
+        route: 'Native app → system user agent',
+        detail: 'The app creates state, nonce, and PKCE S256 before leaving the app boundary.',
+      },
+      {
+        title: 'Authorize at the provider',
+        route: 'External browser → OpenID Provider',
+        detail: 'The person signs in through the trusted provider surface.',
+      },
+      {
+        title: 'Return through the OS',
+        route: 'Browser → claimed HTTPS app link',
+        detail:
+          'The operating system hands the verified HTTPS callback to the app. Private-use schemes and loopback redirects are alternatives.',
+      },
+      {
+        title: 'Match the transaction',
+        route: 'Native app state store',
+        detail: 'The app rejects a missing or changed state before redeeming the code.',
+      },
+      {
+        title: 'Redeem with the verifier',
+        route: 'Native app ↔ token endpoint',
+        detail: 'The one-time code is bound to the original S256 verifier.',
+      },
+    ],
+  },
+  {
+    id: 'oauth',
+    label: 'OAuth-only API access',
+    useWhen: 'Use this when the client needs delegated API access, not a sign-in identity.',
+    actors: ['Person', 'Client', 'Authorization Server', 'Resource API'],
+    redirect: 'https://client.local/oauth/callback',
+    tokenResult: 'Access token → API · no ID token',
+    steps: [
+      {
+        title: 'Ask for API access',
+        route: 'Client → Browser',
+        detail: 'The client requests the smallest useful API scopes with state and PKCE S256.',
+      },
+      {
+        title: 'Authorize access',
+        route: 'Browser → Authorization Server',
+        detail: 'The authorization server handles the resource owner’s decision.',
+      },
+      {
+        title: 'Return a code',
+        route: 'Authorization Server → callback',
+        detail: 'The client matches state and sends the code only to the token endpoint.',
+      },
+      {
+        title: 'Redeem once',
+        route: 'Client ↔ token endpoint',
+        detail: 'The server checks redirect_uri, code lifetime, one-time use, and PKCE.',
+      },
+      {
+        title: 'Call the API',
+        route: 'Client → Resource API',
+        detail: 'The access token authorizes the API call. It does not prove a login identity.',
+      },
+    ],
+  },
+];
+
+type RedirectCaseId =
+  | 'exact'
+  | 'scheme'
+  | 'host'
+  | 'port'
+  | 'path'
+  | 'query'
+  | 'encoding'
+  | 'state'
+  | 'grant'
+  | 'claims'
+  | 'browser';
+
+const REDIRECT_CASES: Array<{
+  id: RedirectCaseId;
+  label: string;
+  diagnosis: string;
+}> = [
+  {
+    id: 'exact',
+    label: 'Exact match',
+    diagnosis:
+      'Exact redirect match. The authorization server may redirect; next inspect the returned state before code redemption.',
+  },
+  {
+    id: 'scheme',
+    label: 'Scheme mismatch',
+    diagnosis:
+      'redirect_uri_mismatch: the scheme differs from the registered value. Do not redirect. Inspect HTTP versus HTTPS and the exact client registration.',
+  },
+  {
+    id: 'host',
+    label: 'Host mismatch',
+    diagnosis:
+      'redirect_uri_mismatch: the host differs from the registered value. Do not redirect. Inspect subdomains, tenant hosts, and the exact client registration.',
+  },
+  {
+    id: 'port',
+    label: 'Port mismatch',
+    diagnosis:
+      'redirect_uri_mismatch: the port differs from the registered value. Do not redirect. Inspect explicit and default ports; native loopback ports are the narrow exception.',
+  },
+  {
+    id: 'path',
+    label: 'Path mismatch',
+    diagnosis:
+      'redirect_uri_mismatch: the path differs from the registered value. Do not redirect. Inspect the client registration and authorization request.',
+  },
+  {
+    id: 'query',
+    label: 'Query mismatch',
+    diagnosis:
+      'redirect_uri_mismatch: the query differs from the registered value. Do not redirect. Inspect fixed query parameters and their exact ordering and encoding.',
+  },
+  {
+    id: 'encoding',
+    label: 'Encoding mismatch',
+    diagnosis:
+      'redirect_uri_mismatch: the encoding differs from the registered value. Do not redirect. Compare the exact serialized URI rather than a decoded look-alike.',
+  },
+  {
+    id: 'state',
+    label: 'State loss',
+    diagnosis:
+      'State/transaction loss: the callback has no matching state. Stop before redemption and inspect cookies, storage, and the original transaction record.',
+  },
+  {
+    id: 'grant',
+    label: 'invalid_grant',
+    diagnosis:
+      'invalid_grant at the token endpoint: the code may be used, expired, issued to another client, or paired with the wrong verifier. Inspect the redemption trace.',
+  },
+  {
+    id: 'claims',
+    label: 'Issuer / audience',
+    diagnosis:
+      'Issuer/audience mismatch after redemption: reject the ID token and inspect discovery issuer, iss, aud, and client_id together.',
+  },
+  {
+    id: 'browser',
+    label: 'Browser boundary',
+    diagnosis:
+      'Browser boundary failure: redirects, CORS, and cookies are different mechanisms. Inspect the failing network entry, allowed origin, SameSite, and cookie domain.',
+  },
+];
+
+const TROUBLESHOOT_CASE_IDS: RedirectCaseId[] = ['path', 'state', 'grant', 'claims', 'browser'];
+
 function useProgress() {
   const [progress, setProgress] = useState<Progress>(() => {
     try {
@@ -231,7 +475,9 @@ function TrustMap({
   announce: (message: string) => void;
 }) {
   const [zones, setZones] = useState<Record<string, string>>(() =>
-    Object.fromEntries(ACTORS.map((actor) => [actor.id, actor.expected])),
+    Object.fromEntries(
+      ACTORS.map((actor) => [actor.id, actor.id === 'client' ? 'Browser session' : actor.expected]),
+    ),
   );
   const [checks, setChecks] = useState<CheckResult[]>([]);
   const [selected, setSelected] = useState('client');
@@ -268,10 +514,19 @@ function TrustMap({
     onResult(passed);
     if (passed) {
       announce('M0 passed. Six actors and both channel types satisfy their trust boundaries.');
-    } else announce('Map needs repair. The incorrect actor remains selected.');
+    } else {
+      const firstIncorrect = ACTORS.find((actor) => zones[actor.id] !== actor.expected);
+      if (firstIncorrect) setSelected(firstIncorrect.id);
+      announce('Map needs repair. The incorrect actor remains selected.');
+    }
   };
   return (
     <div className="module" id="trace_local_001">
+      <ol className="instruction-strip" aria-label="Trust map instructions">
+        <li>1. Select an actor</li>
+        <li>2. Choose its zone</li>
+        <li>3. Check the map</li>
+      </ol>
       <div className="module-toolbar">
         <span className="local-chip">6 ACTORS · 2 BOUNDARIES</span>
         <button
@@ -317,10 +572,19 @@ function TrustMap({
               <span className="actor-mark" aria-hidden="true">
                 {actor.mark}
               </span>
-              <span>{actor.name}</span>
+              <span className="actor-name">{actor.name}</span>
+              <small className="actor-zone">{zones[actor.id]}</small>
             </button>
           ))}
         </div>
+      </div>
+      <div className="channel-legend" aria-label="Channel legend">
+        <span>
+          <i className="front-key" aria-hidden="true" /> Front channel · browser redirect
+        </span>
+        <span>
+          <i className="back-key" aria-hidden="true" /> Back channel · direct TLS exchange
+        </span>
       </div>
       <div className="move-control">
         <label htmlFor="actor-zone">
@@ -1248,6 +1512,458 @@ function Capstone({
   );
 }
 
+function GuidedLearning({
+  onEnterPractice,
+}: {
+  onEnterPractice: (milestone: MilestoneId) => void;
+}) {
+  const [scenarioId, setScenarioId] = useState<ScenarioId>('server');
+  const [step, setStep] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [redirectCaseId, setRedirectCaseId] = useState<RedirectCaseId>('exact');
+  const [diagnosis, setDiagnosis] = useState('Choose a case, then run the local diagnosis.');
+  const [troubleCaseId, setTroubleCaseId] = useState<RedirectCaseId>('path');
+  const scenarioTabRefs = useRef<Partial<Record<ScenarioId, HTMLButtonElement | null>>>({});
+  const scenario = GUIDE_SCENARIOS.find((item) => item.id === scenarioId) ?? GUIDE_SCENARIOS[0];
+  const redirectCase =
+    REDIRECT_CASES.find((item) => item.id === redirectCaseId) ?? REDIRECT_CASES[0];
+  const troubleCase = REDIRECT_CASES.find((item) => item.id === troubleCaseId) ?? REDIRECT_CASES[1];
+  const registeredRedirect = scenario.redirect;
+  const redirectMismatchIds: RedirectCaseId[] = [
+    'scheme',
+    'host',
+    'port',
+    'path',
+    'query',
+    'encoding',
+  ];
+  const requestedRedirect = (() => {
+    if (!redirectMismatchIds.includes(redirectCase.id)) return registeredRedirect;
+    const value = new URL(registeredRedirect);
+    if (redirectCase.id === 'scheme')
+      value.protocol = value.protocol === 'https:' ? 'http:' : 'https:';
+    if (redirectCase.id === 'host') value.hostname = 'wrong.example';
+    if (redirectCase.id === 'port') value.port = '8443';
+    if (redirectCase.id === 'path') value.pathname = `${value.pathname}/extra`;
+    if (redirectCase.id === 'query') value.search = '?tenant=wrong';
+    if (redirectCase.id === 'encoding') {
+      value.pathname = value.pathname.replace('callback', 'call%62ack');
+    }
+    return value.toString();
+  })();
+  const callbackReached = redirectMismatchIds.includes(redirectCase.id)
+    ? 'No callback followed'
+    : redirectCase.id === 'browser'
+      ? 'Browser blocked the token call or lost the transaction state'
+      : `${registeredRedirect}?code=${redirectCase.id === 'grant' ? 'code_used_7K2' : 'code_demo_7K2'}${redirectCase.id === 'state' ? '' : '&state=state_local_9X4'}`;
+
+  useEffect(() => {
+    if (!playing) return;
+    const timer = window.setInterval(() => {
+      setStep((current) => {
+        if (current >= scenario.steps.length - 1) {
+          setPlaying(false);
+          return current;
+        }
+        return current + 1;
+      });
+    }, 1800);
+    return () => window.clearInterval(timer);
+  }, [playing, scenario.steps.length]);
+
+  const selectScenario = (next: ScenarioId) => {
+    setScenarioId(next);
+    setStep(0);
+    setPlaying(false);
+    setRedirectCaseId('exact');
+    setDiagnosis('Choose a case, then run the local diagnosis.');
+  };
+
+  return (
+    <main id="main" className="guide" tabIndex={-1}>
+      <section className="guide-hero" aria-labelledby="guide-title">
+        <div>
+          <span className="eyebrow">GUIDED OIDC ORIENTATION · 5 SHORT STOPS</span>
+          <h1 id="guide-title">Understand OIDC before you wire it</h1>
+          <p>
+            Follow one browser trip from request to callback, learn what must match, then repair the
+            same failures in the local practice lab.
+          </p>
+          <div className="guide-actions">
+            <button className="primary" onClick={() => onEnterPractice('M0')}>
+              Enter practice lab
+            </button>
+            <button className="secondary" onClick={() => onEnterPractice('M1')}>
+              Jump to PKCE practice
+            </button>
+          </div>
+        </div>
+        <aside className="guide-safety" aria-label="Learning environment safety boundary">
+          <span className="status-dot" aria-hidden="true" />
+          <strong>LOCAL FIXTURES ONLY</strong>
+          <p>
+            Use fabricated values only. Everything stays in this browser, and decode examples never
+            verify signatures.
+          </p>
+        </aside>
+      </section>
+
+      <nav className="journey-map" aria-label="Guided learning sections">
+        {['Understand', 'Watch', 'Diagnose', 'Troubleshoot', 'Practice'].map((label, index) => (
+          <a key={label} href={`#guide-${label.toLowerCase()}`}>
+            <span>{String(index + 1).padStart(2, '0')}</span>
+            {label}
+          </a>
+        ))}
+      </nav>
+
+      <section id="guide-understand" className="guide-section understand-section">
+        <div className="guide-section-heading">
+          <span className="eyebrow">01 · UNDERSTAND</span>
+          <h2>OAuth grants access. OIDC adds identity.</h2>
+          <p>
+            OAuth lets a client call an API with limited permission. OpenID Connect uses OAuth’s
+            flow and adds an ID token so the client can establish who signed in. An access token is
+            for the API; an ID token is for the client.
+          </p>
+        </div>
+        <div className="concept-compare">
+          <article>
+            <span className="concept-mark" aria-hidden="true">
+              A
+            </span>
+            <div>
+              <h3>OAuth 2.0</h3>
+              <p>“May this client read my notes?”</p>
+              <strong>Result: an access token for the resource API.</strong>
+            </div>
+          </article>
+          <article>
+            <span className="concept-mark" aria-hidden="true">
+              ID
+            </span>
+            <div>
+              <h3>OpenID Connect</h3>
+              <p>“Who completed this sign-in?”</p>
+              <strong>Result: an ID token for the client, plus optional API access.</strong>
+            </div>
+          </article>
+        </div>
+        <ol className="actor-primer" aria-label="Five actors in the flow">
+          <li>
+            <strong>Person</strong>
+            <span>Chooses to sign in or grant access.</span>
+          </li>
+          <li>
+            <strong>User agent</strong>
+            <span>The browser carries front-channel redirects.</span>
+          </li>
+          <li>
+            <strong>Client</strong>
+            <span>The web, SPA, or native app asking for a result.</span>
+          </li>
+          <li>
+            <strong>Provider</strong>
+            <span>The authorization server; for OIDC, also the identity issuer.</span>
+          </li>
+          <li>
+            <strong>Resource API</strong>
+            <span>Accepts access tokens meant for that API.</span>
+          </li>
+        </ol>
+      </section>
+
+      <section id="guide-watch" className="guide-section watch-section">
+        <div className="guide-section-heading">
+          <span className="eyebrow">02 · WATCH</span>
+          <h2>Watch the browser carry the flow</h2>
+          <p>Select an application shape, then move through the messages at your own pace.</p>
+        </div>
+        <div className="scenario-tabs" role="tablist" aria-label="Application scenarios">
+          {GUIDE_SCENARIOS.map((item) => (
+            <button
+              key={item.id}
+              id={`scenario-tab-${item.id}`}
+              role="tab"
+              aria-selected={scenario.id === item.id}
+              aria-controls="scenario-panel"
+              tabIndex={scenario.id === item.id ? 0 : -1}
+              ref={(node) => {
+                scenarioTabRefs.current[item.id] = node;
+              }}
+              onClick={() => selectScenario(item.id)}
+              onKeyDown={(event) => {
+                const current = GUIDE_SCENARIOS.findIndex((entry) => entry.id === item.id);
+                const next =
+                  event.key === 'Home'
+                    ? 0
+                    : event.key === 'End'
+                      ? GUIDE_SCENARIOS.length - 1
+                      : event.key === 'ArrowRight'
+                        ? (current + 1) % GUIDE_SCENARIOS.length
+                        : event.key === 'ArrowLeft'
+                          ? (current - 1 + GUIDE_SCENARIOS.length) % GUIDE_SCENARIOS.length
+                          : -1;
+                if (next < 0) return;
+                event.preventDefault();
+                const nextId = GUIDE_SCENARIOS[next].id;
+                selectScenario(nextId);
+                requestAnimationFrame(() => scenarioTabRefs.current[nextId]?.focus());
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <div
+          id="scenario-panel"
+          className="scenario-workflow"
+          role="tabpanel"
+          aria-labelledby={`scenario-tab-${scenario.id}`}
+        >
+          <div className="scenario-summary">
+            <div>
+              <span className="eyebrow">ACTORS IN THIS SCENARIO</span>
+              <ul>
+                {scenario.actors.map((actor) => (
+                  <li key={actor}>{actor}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <span className="eyebrow">REDIRECT FORM</span>
+              <code>{scenario.redirect}</code>
+              {scenario.id === 'native' && (
+                <small>Claimed HTTPS app link · private-use and loopback are alternatives</small>
+              )}
+            </div>
+            <div>
+              <span className="eyebrow">TOKEN RESULT</span>
+              <strong>{scenario.tokenResult}</strong>
+            </div>
+            <p>{scenario.useWhen}</p>
+          </div>
+          <div
+            className="actor-flow-graph"
+            role="group"
+            aria-label={`${scenario.label} actor graph`}
+          >
+            {scenario.actors.map((actor, index) => {
+              const active = scenario.steps[step].route.toLowerCase().includes(actor.toLowerCase());
+              return (
+                <div className={`flow-actor ${active ? 'active' : ''}`} key={actor}>
+                  <span aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+                  <strong>{actor}</strong>
+                  {index < scenario.actors.length - 1 && (
+                    <i className="flow-edge" aria-hidden="true">
+                      →
+                    </i>
+                  )}
+                </div>
+              );
+            })}
+            <p className="active-message" key={`${scenario.id}-${step}`}>
+              <span aria-hidden="true" />
+              {`Active message · ${scenario.steps[step].route}`}
+            </p>
+          </div>
+          <div className="workflow-stage">
+            <ol className="workflow-track" aria-label={`${scenario.label} workflow steps`}>
+              {scenario.steps.map((item, index) => (
+                <li
+                  key={item.title}
+                  className={index === step ? 'active' : index < step ? 'complete' : ''}
+                  aria-current={index === step ? 'step' : undefined}
+                >
+                  <span>{String(index + 1).padStart(2, '0')}</span>
+                  <strong>{item.title}</strong>
+                </li>
+              ))}
+            </ol>
+            <div
+              className="workflow-status"
+              role="status"
+              aria-label="Workflow step"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              <span>
+                Step {step + 1} of {scenario.steps.length}
+              </span>
+              <h3>{scenario.steps[step].title}</h3>
+              <code>{scenario.steps[step].route}</code>
+              <p>{scenario.steps[step].detail}</p>
+            </div>
+          </div>
+          <div className="workflow-controls" aria-label="Workflow playback controls">
+            <button
+              className="secondary"
+              onClick={() => setPlaying(!playing)}
+              aria-pressed={playing}
+            >
+              {playing ? 'Pause flow' : 'Play flow'}
+            </button>
+            <button
+              className="secondary"
+              disabled={step === 0}
+              onClick={() => {
+                setPlaying(false);
+                setStep(step - 1);
+              }}
+            >
+              Previous step
+            </button>
+            <button
+              className="secondary"
+              disabled={step === scenario.steps.length - 1}
+              onClick={() => {
+                setPlaying(false);
+                setStep(step + 1);
+              }}
+            >
+              Next step
+            </button>
+            <button
+              className="secondary"
+              onClick={() => {
+                setPlaying(false);
+                setStep(0);
+              }}
+            >
+              Restart flow
+            </button>
+          </div>
+          <p className="pkce-note">
+            PKCE S256 is required for public clients and recommended for every client type.
+          </p>
+        </div>
+      </section>
+
+      <section id="guide-diagnose" className="guide-section redirect-section">
+        <div className="guide-section-heading">
+          <span className="eyebrow">03 · DIAGNOSE</span>
+          <h2>Redirect URI lens</h2>
+          <p>
+            The callback is the client endpoint, claimed app link, private-use URI, or loopback
+            listener reached through the user agent. It receives the authorization response; it is
+            not the token endpoint.
+          </p>
+        </div>
+        <div className="redirect-values" aria-label="Redirect URI comparison">
+          <label>
+            Registered URI<code>{registeredRedirect}</code>
+          </label>
+          <label>
+            Requested redirect_uri<code>{requestedRedirect}</code>
+          </label>
+          <label>
+            Callback actually reached<code>{callbackReached}</code>
+          </label>
+        </div>
+        <p className="exact-rule">
+          Exact registered/requested matching is the default security rule. Native loopback
+          redirects have one narrow exception: the operating system may choose the port.
+        </p>
+        <div className="case-picker" aria-label="Redirect diagnosis cases">
+          {REDIRECT_CASES.map((item) => (
+            <button
+              key={item.id}
+              className={redirectCase.id === item.id ? 'selected' : ''}
+              aria-pressed={redirectCase.id === item.id}
+              onClick={() => {
+                setRedirectCaseId(item.id);
+                setDiagnosis('Case loaded. Run the local diagnosis.');
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <div className="diagnosis-action">
+          <button className="primary" onClick={() => setDiagnosis(redirectCase.diagnosis)}>
+            Diagnose redirect
+          </button>
+          <div role="status" aria-label="Redirect diagnosis" aria-live="polite">
+            <strong>Local result</strong>
+            <p>{diagnosis}</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="guide-troubleshoot" className="guide-section troubleshoot-section">
+        <div className="guide-section-heading">
+          <span className="eyebrow">04 · TROUBLESHOOT</span>
+          <h2>Troubleshoot from the trace</h2>
+          <p>
+            Start with what failed, name the invariant, find its trace, then inspect one next thing.
+          </p>
+        </div>
+        <div className="trouble-layout">
+          <div className="trouble-list" aria-label="Troubleshooting cases">
+            {REDIRECT_CASES.filter((item) => TROUBLESHOOT_CASE_IDS.includes(item.id)).map(
+              (item) => (
+                <button
+                  key={item.id}
+                  aria-label={`Troubleshoot ${item.id === 'path' ? 'redirect mismatch' : item.label}`}
+                  className={troubleCase.id === item.id ? 'selected' : ''}
+                  aria-pressed={troubleCase.id === item.id}
+                  onClick={() => setTroubleCaseId(item.id)}
+                >
+                  {item.label}
+                </button>
+              ),
+            )}
+          </div>
+          <article className="trouble-card">
+            <dl>
+              <div>
+                <dt>Symptom</dt>
+                <dd>{troubleCase.label}</dd>
+              </div>
+              <div>
+                <dt>Failed invariant</dt>
+                <dd>{troubleCase.diagnosis.split(':')[0]}</dd>
+              </div>
+              <div>
+                <dt>Trace location</dt>
+                <dd>
+                  {troubleCase.id === 'grant'
+                    ? 'Token endpoint response'
+                    : troubleCase.id === 'claims'
+                      ? 'ID token validation'
+                      : troubleCase.id === 'browser'
+                        ? 'Browser network + storage'
+                        : 'Authorization request / callback'}
+                </dd>
+              </div>
+              <div>
+                <dt>Next check</dt>
+                <dd>{troubleCase.diagnosis}</dd>
+              </div>
+            </dl>
+          </article>
+        </div>
+      </section>
+
+      <section id="guide-practice" className="guide-section practice-callout">
+        <div>
+          <span className="eyebrow">05 · PRACTICE</span>
+          <h2>Build the trace yourself</h2>
+          <p>Eight local milestones turn the model into protocol and security checks.</p>
+        </div>
+        <div className="guide-actions">
+          <button className="primary" onClick={() => onEnterPractice('M0')}>
+            Start practice at M0
+          </button>
+          <button className="secondary" onClick={() => onEnterPractice('M1')}>
+            Open PKCE milestone
+          </button>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 function Inspector({ milestone, status }: { milestone: Milestone; status: GateStatus }) {
   return (
     <aside className="inspector" aria-label="Current task inspector">
@@ -1309,6 +2025,7 @@ function Inspector({ milestone, status }: { milestone: Milestone; status: GateSt
 }
 
 export function App() {
+  const [view, setView] = useState<'guide' | 'practice'>('guide');
   const [active, setActive] = useState<MilestoneId>('M0');
   const { progress, setProgress, mark } = useProgress();
   const [announcement, setAnnouncement] = useState(
@@ -1335,8 +2052,8 @@ export function App() {
     localStorage.setItem('protocol-workbench-theme', theme);
   }, [theme]);
   useEffect(() => {
-    if (!progress[active]) mark(active, 'in progress');
-  }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (view === 'practice' && !progress[active]) mark(active, 'in progress');
+  }, [active, view]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!resetOpen) return;
     requestAnimationFrame(() => resetInputRef.current?.focus());
@@ -1395,11 +2112,26 @@ export function App() {
         main.focus({ preventScroll: true });
         return;
       }
-      taskHeadingRef.current?.focus();
+      const heading = taskHeadingRef.current;
+      heading?.scrollIntoView({ block: 'start', behavior: 'auto' });
+      heading?.focus({ preventScroll: true });
     });
   };
+  const enterPractice = (id: MilestoneId) => {
+    setActive(id);
+    setView('practice');
+    setAnnouncement(`${id} selected. ${MILESTONES.find((item) => item.id === id)?.prompt}`);
+    requestAnimationFrame(() => {
+      window.scrollTo(0, 0);
+      mainRef.current?.focus({ preventScroll: true });
+    });
+  };
+  const learnFlow = () => {
+    setView('guide');
+    requestAnimationFrame(() => document.querySelector<HTMLElement>('#main')?.focus());
+  };
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${view === 'guide' ? 'guide-mode' : ''}`}>
       <header className="product-header">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
@@ -1434,145 +2166,166 @@ export function App() {
           </button>
         </div>
       </header>
-      <nav className="milestone-rail" aria-label="Learning milestones">
-        <div className="rail-heading">
-          <span className="eyebrow">LOCAL PROGRESS</span>
-          <strong>{passedCount === 8 ? 'Workbench complete' : 'Build the trace'}</strong>
-        </div>
-        {MILESTONES.map((item, index) => {
-          const itemStatus = progress[item.id] ?? 'not started';
-          return (
-            <button
-              key={item.id}
-              className={active === item.id ? 'current' : ''}
-              aria-current={active === item.id ? 'step' : undefined}
-              onClick={() => selectMilestone(item.id)}
-            >
-              <span className="milestone-number">{item.id}</span>
-              <span>
-                <strong>{item.verb}</strong>
-                <small>{item.title}</small>
-              </span>
-              <i className={`gate-dot ${itemStatus.replaceAll(' ', '-')}`} aria-label={itemStatus}>
-                {itemStatus === 'passed' ? '✓' : String(index + 1).padStart(2, '0')}
-              </i>
-            </button>
-          );
-        })}
-        <div className="rail-footer">
-          <span>All interactions stay in this browser.</span>
-          <span>Progress uses localStorage only.</span>
-        </div>
-      </nav>
-      <main id="main" className="workbench" tabIndex={-1} ref={mainRef}>
-        <section className="task-header">
-          <div>
-            <span className="eyebrow">
-              {milestone.id} · {milestone.verb.toUpperCase()}
-            </span>
-            <h1 ref={taskHeadingRef} tabIndex={-1}>
-              {milestone.title}
-            </h1>
-            <p>{milestone.prompt}</p>
-          </div>
-          <div className={`gate-status ${status.replaceAll(' ', '-')}`}>
-            <span>{status === 'passed' ? '✓' : status === 'needs repair' ? '×' : '→'}</span>
-            <div>
-              <small>GATE STATUS</small>
-              <strong>{status}</strong>
+      {view === 'guide' ? (
+        <GuidedLearning onEnterPractice={enterPractice} />
+      ) : (
+        <>
+          <nav className="milestone-rail" aria-label="Learning milestones">
+            <div className="rail-heading">
+              <span className="eyebrow">LOCAL PROGRESS</span>
+              <strong>{passedCount === 8 ? 'Workbench complete' : 'Build the trace'}</strong>
             </div>
+            {MILESTONES.map((item, index) => {
+              const itemStatus = progress[item.id] ?? 'not started';
+              return (
+                <button
+                  key={item.id}
+                  className={active === item.id ? 'current' : ''}
+                  aria-current={active === item.id ? 'step' : undefined}
+                  onClick={() => selectMilestone(item.id)}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter' && event.key !== ' ') return;
+                    event.preventDefault();
+                    selectMilestone(item.id);
+                  }}
+                >
+                  <span className="milestone-number">{item.id}</span>
+                  <span>
+                    <strong>{item.verb}</strong>
+                    <small>{item.title}</small>
+                  </span>
+                  <i
+                    className={`gate-dot ${itemStatus.replaceAll(' ', '-')}`}
+                    aria-label={itemStatus}
+                  >
+                    {itemStatus === 'passed' ? '✓' : String(index + 1).padStart(2, '0')}
+                  </i>
+                </button>
+              );
+            })}
+            <div className="rail-footer">
+              <span>All interactions stay in this browser.</span>
+              <span>Progress uses localStorage only.</span>
+            </div>
+          </nav>
+          <main id="main" className="workbench" tabIndex={-1} ref={mainRef}>
+            <section className="task-header">
+              <div>
+                <span className="eyebrow">
+                  {milestone.id} · {milestone.verb.toUpperCase()}
+                </span>
+                <h1 ref={taskHeadingRef} tabIndex={-1}>
+                  {milestone.title}
+                </h1>
+                <p>{milestone.prompt}</p>
+              </div>
+              <div className="task-actions">
+                <button className="secondary" onClick={learnFlow}>
+                  Learn the flow
+                </button>
+                <div className={`gate-status ${status.replaceAll(' ', '-')}`}>
+                  <span>{status === 'passed' ? '✓' : status === 'needs repair' ? '×' : '→'}</span>
+                  <div>
+                    <small>GATE STATUS</small>
+                    <strong>{status}</strong>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <section className="bench-surface" aria-label={`${milestone.title} interactive bench`}>
+              {active === 'M0' && (
+                <TrustMap
+                  onResult={(passed) => recordResult('M0', passed)}
+                  announce={setAnnouncement}
+                />
+              )}
+              {active === 'M1' && (
+                <PkceComposer
+                  onResult={(passed) => recordResult('M1', passed)}
+                  announce={setAnnouncement}
+                />
+              )}
+              {active === 'M2' && (
+                <ScopeLab
+                  onResult={(passed) => recordResult('M2', passed)}
+                  announce={setAnnouncement}
+                />
+              )}
+              {active === 'M3' && (
+                <TokenLab
+                  onResult={(passed) => recordResult('M3', passed)}
+                  announce={setAnnouncement}
+                />
+              )}
+              {active === 'M4' && (
+                <IdentityLab
+                  onResult={(passed) => recordResult('M4', passed)}
+                  announce={setAnnouncement}
+                />
+              )}
+              {active === 'M5' && (
+                <ThreatArcade
+                  onResult={(passed) => recordResult('M5', passed)}
+                  announce={setAnnouncement}
+                />
+              )}
+              {active === 'M6' && (
+                <SchemaBench
+                  onResult={(passed) => recordResult('M6', passed)}
+                  announce={setAnnouncement}
+                />
+              )}
+              {active === 'M7' && (
+                <Capstone
+                  onResult={(passed) => recordResult('M7', passed)}
+                  announce={setAnnouncement}
+                  progress={progress}
+                />
+              )}
+            </section>
+            <section id="references" className="references" aria-label="Protocol references">
+              <span className="eyebrow">AUTHORITATIVE TARGETS</span>
+              <div>
+                <a href="https://www.rfc-editor.org/rfc/rfc9700">
+                  OAuth 2.0 Security BCP · RFC 9700
+                </a>
+                <a href="https://www.rfc-editor.org/rfc/rfc6749">OAuth 2.0 · RFC 6749</a>
+                <a href="https://www.rfc-editor.org/rfc/rfc7636">PKCE · RFC 7636</a>
+                <a href="https://openid.net/specs/openid-connect-core-1_0.html">OIDC Core 1.0</a>
+                <a href="https://www.rfc-editor.org/rfc/rfc8414">AS Metadata · RFC 8414</a>
+                <a href="https://www.rfc-editor.org/rfc/rfc7519">JWT · RFC 7519</a>
+              </div>
+              <p>
+                External references are optional reading. Every simulation remains local and
+                deterministic.
+              </p>
+            </section>
+          </main>
+          <Inspector milestone={milestone} status={status} />
+          <div className="status-strip" role="status" aria-live="polite">
+            <span className="status-pulse" aria-hidden="true" />
+            <strong>
+              {active} · {status.toUpperCase()}
+            </strong>
+            <span>{announcement}</span>
+            <code>{milestone.trace}</code>
           </div>
-        </section>
-        <section className="bench-surface" aria-label={`${milestone.title} interactive bench`}>
-          {active === 'M0' && (
-            <TrustMap
-              onResult={(passed) => recordResult('M0', passed)}
-              announce={setAnnouncement}
-            />
-          )}
-          {active === 'M1' && (
-            <PkceComposer
-              onResult={(passed) => recordResult('M1', passed)}
-              announce={setAnnouncement}
-            />
-          )}
-          {active === 'M2' && (
-            <ScopeLab
-              onResult={(passed) => recordResult('M2', passed)}
-              announce={setAnnouncement}
-            />
-          )}
-          {active === 'M3' && (
-            <TokenLab
-              onResult={(passed) => recordResult('M3', passed)}
-              announce={setAnnouncement}
-            />
-          )}
-          {active === 'M4' && (
-            <IdentityLab
-              onResult={(passed) => recordResult('M4', passed)}
-              announce={setAnnouncement}
-            />
-          )}
-          {active === 'M5' && (
-            <ThreatArcade
-              onResult={(passed) => recordResult('M5', passed)}
-              announce={setAnnouncement}
-            />
-          )}
-          {active === 'M6' && (
-            <SchemaBench
-              onResult={(passed) => recordResult('M6', passed)}
-              announce={setAnnouncement}
-            />
-          )}
-          {active === 'M7' && (
-            <Capstone
-              onResult={(passed) => recordResult('M7', passed)}
-              announce={setAnnouncement}
-              progress={progress}
-            />
-          )}
-        </section>
-        <section id="references" className="references" aria-label="Protocol references">
-          <span className="eyebrow">AUTHORITATIVE TARGETS</span>
-          <div>
-            <a href="https://www.rfc-editor.org/rfc/rfc9700">OAuth 2.0 Security BCP · RFC 9700</a>
-            <a href="https://www.rfc-editor.org/rfc/rfc6749">OAuth 2.0 · RFC 6749</a>
-            <a href="https://www.rfc-editor.org/rfc/rfc7636">PKCE · RFC 7636</a>
-            <a href="https://openid.net/specs/openid-connect-core-1_0.html">OIDC Core 1.0</a>
-            <a href="https://www.rfc-editor.org/rfc/rfc8414">AS Metadata · RFC 8414</a>
-            <a href="https://www.rfc-editor.org/rfc/rfc7519">JWT · RFC 7519</a>
-          </div>
-          <p>
-            External references are optional reading. Every simulation remains local and
-            deterministic.
-          </p>
-        </section>
-      </main>
-      <Inspector milestone={milestone} status={status} />
-      <div className="status-strip" role="status" aria-live="polite">
-        <span className="status-pulse" aria-hidden="true" />
-        <strong>
-          {active} · {status.toUpperCase()}
-        </strong>
-        <span>{announcement}</span>
-        <code>{milestone.trace}</code>
-      </div>
-      <nav className="mobile-switcher" aria-label="Mobile task switcher">
-        <button className="active" onClick={() => mainRef.current?.scrollIntoView()}>
-          Build
-        </button>
-        <button onClick={() => document.querySelector('.inspector')?.scrollIntoView()}>
-          Inspect
-        </button>
-        <button onClick={() => document.querySelector('.evidence')?.scrollIntoView()}>
-          Checks
-        </button>
-        <button onClick={() => document.querySelector('.references')?.scrollIntoView()}>
-          Refs
-        </button>
-      </nav>
+          <nav className="mobile-switcher" aria-label="Mobile task switcher">
+            <button className="active" onClick={() => mainRef.current?.scrollIntoView()}>
+              Build
+            </button>
+            <button onClick={() => document.querySelector('.inspector')?.scrollIntoView()}>
+              Inspect
+            </button>
+            <button onClick={() => document.querySelector('.evidence')?.scrollIntoView()}>
+              Checks
+            </button>
+            <button onClick={() => document.querySelector('.references')?.scrollIntoView()}>
+              Refs
+            </button>
+          </nav>
+        </>
+      )}
       {resetOpen && (
         <div className="dialog-backdrop" role="presentation">
           <div

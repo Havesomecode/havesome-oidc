@@ -356,6 +356,10 @@ Pointer drag always has a select + `Move to…` or reorder-button equivalent. Co
 
 ## No-essay content boundary
 
+For the default first-run orientation, this boundary is superseded by
+`GUIDED_LEARNING_PASS.md`: concise conceptual explanation is required before practice. The
+limits below continue to apply inside the eight hands-on milestone benches.
+
 Allowed: task prompts under 120 characters; labels; endpoint/parameter/claim names; synthetic code and HTTP; one-line outcome; one-line security consequence; staged hints; concise keyboard/screen-reader instructions; evidence rows.
 
 Disallowed: conceptual chapters, multi-paragraph explanations, historical background, standards summaries, marketing promises, generic encouragement, and any copy that calls decode output verified.
@@ -448,7 +452,7 @@ Copy test: if content can be replaced by an action, editable example, state comp
 - [ ] Light/dark themes meet stated contrast targets in default, hover, focus, active, selected, disabled, error, success, and compromised states.
 - [ ] Monochrome review preserves every actor, object, channel, boundary, outcome, and threat distinction.
 - [ ] Reduced-motion review preserves sequence and status without flight, parallax, shake, pulse, or flash.
-- [ ] No product UI contains essay copy, external assets, real identifiers, or verification claims based on decode.
+- [ ] Practice benches contain no essay copy; the first-run guide follows `GUIDED_LEARNING_PASS.md`; no product UI contains external assets, real identifiers, or verification claims based on decode.
 
 ### Design-only boundary
 
