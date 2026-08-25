@@ -144,6 +144,31 @@ describe('Protocol Workbench', () => {
     expect(screen.getAllByRole('button', { name: /challenge/i })).toHaveLength(9);
   });
 
+  it('preserves rapid keyboard focus while practice entry focus is pending', async () => {
+    const queuedFrames: FrameRequestCallback[] = [];
+    const requestFrame = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        queuedFrames.push(callback);
+        return queuedFrames.length;
+      });
+    const user = userEvent.setup();
+
+    try {
+      render(<App />);
+      await user.click(screen.getByRole('button', { name: /enter practice lab/i }));
+      const threatMilestone = screen.getByRole('button', { name: /^M5/ });
+      threatMilestone.focus();
+
+      queuedFrames.splice(0).forEach((callback) => callback(performance.now()));
+      expect(threatMilestone).toHaveFocus();
+      await user.keyboard('{Enter}');
+      expect(screen.getByRole('heading', { name: 'Threat arcade', level: 1 })).toBeVisible();
+    } finally {
+      requestFrame.mockRestore();
+    }
+  });
+
   it('reorders PKCE messages without dragging', async () => {
     const user = userEvent.setup();
     render(<App />);

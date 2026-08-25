@@ -374,8 +374,7 @@ test('keeps desktop headings below the sticky header after keyboard milestone se
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await enterPractice(page);
-  await milestone(page, 'M5').focus();
-  await page.keyboard.press('Enter');
+  await milestone(page, 'M5').press('Enter');
 
   await expect(page.getByRole('heading', { name: 'Threat arcade', level: 1 })).toBeVisible();
   await expect(page.locator('#main')).toBeFocused();

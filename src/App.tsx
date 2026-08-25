@@ -2131,7 +2131,12 @@ export function App() {
     setAnnouncement(`${id} selected. ${MILESTONES.find((item) => item.id === id)?.prompt}`);
     requestAnimationFrame(() => {
       window.scrollTo(0, 0);
-      mainRef.current?.focus({ preventScroll: true });
+      const activeElement = document.activeElement;
+      const focusIsUnclaimed =
+        activeElement === null ||
+        activeElement === document.body ||
+        activeElement === document.documentElement;
+      if (focusIsUnclaimed) mainRef.current?.focus({ preventScroll: true });
     });
   };
   const learnFlow = () => {
@@ -2191,11 +2196,6 @@ export function App() {
                   className={active === item.id ? 'current' : ''}
                   aria-current={active === item.id ? 'step' : undefined}
                   onClick={() => selectMilestone(item.id)}
-                  onKeyDown={(event) => {
-                    if (event.key !== 'Enter' && event.key !== ' ') return;
-                    event.preventDefault();
-                    selectMilestone(item.id);
-                  }}
                 >
                   <span className="milestone-number">{item.id}</span>
                   <span>
