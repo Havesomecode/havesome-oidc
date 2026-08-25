@@ -2081,7 +2081,7 @@ kbd {
   border: 2px solid var(--fg);
 }
 .practice-callout .guide-actions {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
 }
 
 @media (max-width: 1199px) {
