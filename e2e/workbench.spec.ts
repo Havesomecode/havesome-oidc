@@ -27,6 +27,42 @@ const expectDesktopHeadingsBelowHeader = async (page: import('@playwright/test')
   ).toBeGreaterThanOrEqual(geometry.headerBottom);
 };
 
+const visibleControlGeometry = (page: import('@playwright/test').Page, minimum: number) =>
+  page
+    .locator('button:visible, input:visible, select:visible, textarea:visible')
+    .evaluateAll((controls, targetMinimum) => {
+      const kinds = new Set<string>();
+      const undersized = controls.flatMap((control) => {
+        const labels = control instanceof HTMLInputElement ? control.labels : null;
+        const isChoice =
+          control instanceof HTMLInputElement &&
+          (control.type === 'checkbox' || control.type === 'radio');
+        const target = isChoice ? (labels?.[0] ?? control) : control;
+        const rect = target.getBoundingClientRect();
+        const kind =
+          control instanceof HTMLInputElement
+            ? `input:${control.type || 'text'}`
+            : control.tagName.toLowerCase();
+        kinds.add(kind);
+
+        return rect.width < targetMinimum || rect.height < targetMinimum
+          ? [
+              {
+                kind,
+                label:
+                  control.getAttribute('aria-label') ??
+                  labels?.[0]?.textContent?.trim() ??
+                  control.textContent?.trim(),
+                width: rect.width,
+                height: rect.height,
+              },
+            ]
+          : [];
+      });
+
+      return { kinds: [...kinds], undersized };
+    }, minimum);
+
 test.beforeEach(async ({ page }) => {
   await page.goto('./');
   await page.evaluate(() => localStorage.clear());
@@ -144,18 +180,23 @@ test('keeps visible controls at 44px and 48px on coarse pointers', async ({
 }) => {
   test.skip(browserName !== 'chromium', 'Control geometry is covered once in Chromium.');
   await enterPractice(page);
-  await milestone(page, 'M1').click();
-  const desktopUndersized = await page
-    .locator('button:visible, select:visible')
-    .evaluateAll((controls) =>
-      controls
-        .map((control) => {
-          const rect = control.getBoundingClientRect();
-          return { label: control.textContent?.trim(), width: rect.width, height: rect.height };
-        })
-        .filter(({ width, height }) => width < 44 || height < 44),
+  const desktopKinds = new Set<string>();
+  for (const width of [1440, 1920]) {
+    await page.setViewportSize({ width, height: 1000 });
+    for (const id of ['M0', 'M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7']) {
+      await milestone(page, id).click();
+      const geometry = await visibleControlGeometry(page, 44);
+      geometry.kinds.forEach((kind) => desktopKinds.add(kind));
+      expect(geometry.undersized, `${id} desktop control targets at ${width}px`).toEqual([]);
+    }
+    await page.getByRole('button', { name: 'Reset all' }).click();
+    const dialogGeometry = await visibleControlGeometry(page, 44);
+    dialogGeometry.kinds.forEach((kind) => desktopKinds.add(kind));
+    expect(dialogGeometry.undersized, `desktop reset dialog control targets at ${width}px`).toEqual(
+      [],
     );
-  expect(desktopUndersized).toEqual([]);
+    await page.keyboard.press('Escape');
+  }
 
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
@@ -165,18 +206,28 @@ test('keeps visible controls at 44px and 48px on coarse pointers', async ({
   const mobile = await context.newPage();
   await mobile.goto(new URL('/', page.url()).toString());
   await mobile.getByRole('button', { name: 'Enter practice lab' }).click();
-  await milestone(mobile, 'M1').click();
-  const coarseUndersized = await mobile
-    .locator('button:visible, select:visible')
-    .evaluateAll((controls) =>
-      controls
-        .map((control) => {
-          const rect = control.getBoundingClientRect();
-          return { label: control.textContent?.trim(), width: rect.width, height: rect.height };
-        })
-        .filter(({ width, height }) => width < 48 || height < 48),
-    );
-  expect(coarseUndersized).toEqual([]);
+  const coarseKinds = new Set<string>();
+  for (const width of [320, 390]) {
+    await mobile.setViewportSize({ width, height: 844 });
+    for (const id of ['M0', 'M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7']) {
+      await milestone(mobile, id).click();
+      const geometry = await visibleControlGeometry(mobile, 48);
+      geometry.kinds.forEach((kind) => coarseKinds.add(kind));
+      expect(geometry.undersized, `${id} coarse-pointer control targets at ${width}px`).toEqual([]);
+    }
+    await mobile.getByRole('button', { name: 'Reset all' }).click();
+    const dialogGeometry = await visibleControlGeometry(mobile, 48);
+    dialogGeometry.kinds.forEach((kind) => coarseKinds.add(kind));
+    expect(
+      dialogGeometry.undersized,
+      `coarse-pointer reset dialog control targets at ${width}px`,
+    ).toEqual([]);
+    await mobile.keyboard.press('Escape');
+  }
+
+  const intendedKinds = ['button', 'input:checkbox', 'input:text', 'select', 'textarea'];
+  expect([...desktopKinds].sort()).toEqual(intendedKinds);
+  expect([...coarseKinds].sort()).toEqual(intendedKinds);
   await context.close();
 });
 

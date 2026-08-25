@@ -747,6 +747,7 @@ button:hover:not(:disabled) {
 input,
 select,
 textarea {
+  min-height: 44px;
   border: 1px solid var(--border);
   border-radius: 3px;
   background: var(--surface);
@@ -757,7 +758,7 @@ textarea {
 .identity-trace select,
 .dialog input {
   width: 100%;
-  min-height: 38px;
+  min-height: 44px;
   padding: 7px 9px;
   color: var(--fg);
   font: 500 11px/1.4 var(--mono);
@@ -2599,7 +2600,9 @@ kbd {
 
 @media (pointer: coarse) {
   button,
+  input,
   select,
+  textarea,
   .repair-toggle,
   .primary,
   .secondary,
@@ -2608,7 +2611,13 @@ kbd {
   .text-button,
   .icon-button,
   .header-actions .secondary,
-  .reorder button {
+  .reorder button,
+  .move-control select,
+  .parameter-grid input,
+  .inline-fields input,
+  .identity-trace input,
+  .identity-trace select,
+  .dialog input {
     min-height: 48px;
   }
   button,
