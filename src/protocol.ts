@@ -15,6 +15,7 @@ export type PkceConfig = {
   state: string;
   challengeMethod: string;
   verifier: string;
+  codeChallenge: string;
   codeUsed: boolean;
   codeExpired: boolean;
 };
@@ -28,7 +29,20 @@ const result = (
   trace = 'trace_local_001',
 ): CheckResult => ({ id, label, expected, observed, passed, trace });
 
-export function checkPkceFlow(config: PkceConfig): CheckResult[] {
+export async function deriveS256CodeChallenge(verifier: string): Promise<string> {
+  const digest = await globalThis.crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(verifier),
+  );
+  const encoded = globalThis.btoa(String.fromCharCode(...new Uint8Array(digest)));
+  return encoded.replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+}
+
+export async function checkPkceFlow(config: PkceConfig): Promise<CheckResult[]> {
+  const verifierValid = /^[A-Za-z0-9._~-]{43,128}$/.test(config.verifier);
+  const derivedChallenge = verifierValid
+    ? await deriveS256CodeChallenge(config.verifier)
+    : '(invalid verifier)';
   return [
     result(
       'response-type',
@@ -75,9 +89,16 @@ export function checkPkceFlow(config: PkceConfig): CheckResult[] {
     result(
       'pkce-verifier',
       'PKCE verifier',
-      '43+ characters',
+      '43–128 unreserved characters',
       `${config.verifier.length} characters`,
-      config.verifier.length >= 43,
+      verifierValid,
+    ),
+    result(
+      'pkce-challenge',
+      'PKCE S256 binding',
+      'BASE64URL(SHA256(code_verifier))',
+      config.codeChallenge,
+      verifierValid && config.codeChallenge === derivedChallenge,
     ),
     result(
       'single-use',
@@ -381,8 +402,52 @@ export const CAPSTONE_FAULTS: CapstoneFault[] = [
   },
 ];
 
-export function checkCapstone(repairs: Record<string, boolean>): CheckResult[] {
-  return CAPSTONE_FAULTS.map((fault, index) =>
+export const CAPSTONE_SCENARIOS: Record<string, CapstoneFault[]> = {
+  'FORGE-7K2-05': CAPSTONE_FAULTS,
+  'FORGE-I42-05': [
+    {
+      id: 'redirect',
+      phase: 'Authorize',
+      threat: 'Redirect manipulation',
+      expected: 'exact https://client.local/callback',
+      observed: 'encoded path segment accepted',
+    },
+    {
+      id: 'pkce',
+      phase: 'Redeem',
+      threat: 'Code interception',
+      expected: 'derived S256 challenge matches verifier',
+      observed: 'challenge copied from another transaction',
+    },
+    {
+      id: 'nonce',
+      phase: 'Consume ID token',
+      threat: 'Nonce replay',
+      expected: 'nonce_local_I42 once',
+      observed: 'nonce_local_I42 reused after restart',
+    },
+    {
+      id: 'audience',
+      phase: 'Call API',
+      threat: 'Audience confusion',
+      expected: 'aud api://notes',
+      observed: 'aud client_notes_web',
+    },
+    {
+      id: 'subject',
+      phase: 'Reconcile UserInfo',
+      threat: 'Subject substitution',
+      expected: 'sub pair_ada_notes',
+      observed: 'sub pair_ada_profile',
+    },
+  ],
+};
+
+export function checkCapstone(
+  repairs: Record<string, boolean>,
+  faults: CapstoneFault[] = CAPSTONE_FAULTS,
+): CheckResult[] {
+  return faults.map((fault, index) =>
     result(
       fault.id,
       `${fault.phase}: ${fault.threat}`,

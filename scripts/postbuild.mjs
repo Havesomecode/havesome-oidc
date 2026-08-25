@@ -1,9 +1,14 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { access, readFile, writeFile } from 'node:fs/promises';
 
 const html = await readFile('dist/index.html', 'utf8');
 if (!html.includes('./assets/') && !html.includes('assets/')) {
   throw new Error('Expected GitHub Pages-safe relative asset references.');
 }
+
+const localLinks = [...html.matchAll(/<link\b[^>]*\bhref="\.\/([^"?#]+)"/g)].map(
+  (match) => match[1],
+);
+await Promise.all(localLinks.map((href) => access(`dist/${href}`)));
 
 const notFound = `<!doctype html>
 <html lang="en">

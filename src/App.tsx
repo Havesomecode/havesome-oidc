@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  CAPSTONE_FAULTS,
+  CAPSTONE_SCENARIOS,
   DISCOVERY_FIXTURE,
   THREATS,
   type CheckResult,
@@ -135,7 +135,7 @@ const INITIAL_HTTP = `POST /token HTTP/1.1
 Host: op.local
 Content-Type: application/x-www-form-urlencoded
 
-client_id=client_notes_web&code=code_demo_7K2&code_verifier=verifier_local_43_characters_demo_only_7K2X&grant_type=authorization_code`;
+client_id=client_notes_web&code=code_demo_7K2&code_verifier=dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk&grant_type=authorization_code`;
 
 const INITIAL_JSON = `{
   "issuer": "https://op.local",
@@ -224,10 +224,10 @@ function RunButton({
 }
 
 function TrustMap({
-  onPass,
+  onResult,
   announce,
 }: {
-  onPass: () => void;
+  onResult: (passed: boolean) => void;
   announce: (message: string) => void;
 }) {
   const [zones, setZones] = useState<Record<string, string>>(() =>
@@ -264,8 +264,9 @@ function TrustMap({
     ];
     const next = [...actorChecks, ...routeChecks];
     setChecks(next);
-    if (next.every((item) => item.passed)) {
-      onPass();
+    const passed = next.every((item) => item.passed);
+    onResult(passed);
+    if (passed) {
       announce('M0 passed. Six actors and both channel types satisfy their trust boundaries.');
     } else announce('Map needs repair. The incorrect actor remains selected.');
   };
@@ -346,10 +347,10 @@ function TrustMap({
 }
 
 function PkceComposer({
-  onPass,
+  onResult,
   announce,
 }: {
-  onPass: () => void;
+  onResult: (passed: boolean) => void;
   announce: (message: string) => void;
 }) {
   const [messages, setMessages] = useState(SEQUENCE);
@@ -360,7 +361,8 @@ function PkceComposer({
     scope: 'openid notes.read',
     state: 'state_local_9X4',
     challengeMethod: 'S256',
-    verifier: 'verifier_local_43_characters_demo_only_7K2X',
+    verifier: 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk',
+    codeChallenge: 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM',
     codeUsed: false,
     codeExpired: false,
   });
@@ -373,9 +375,9 @@ function PkceComposer({
     setMessages(copy);
     announce(`${copy[target].type} moved to position ${target + 1}.`);
   };
-  const run = () => {
+  const run = async () => {
     const orderSafe = messages.every((message, index) => message.id === SEQUENCE[index].id);
-    const flowChecks = checkPkceFlow(config);
+    const flowChecks = await checkPkceFlow(config);
     const next: CheckResult[] = [
       {
         id: 'message-order',
@@ -388,17 +390,19 @@ function PkceComposer({
       ...flowChecks,
     ];
     setChecks(next);
-    if (next.every((check) => check.passed)) {
-      onPass();
+    const passed = next.every((check) => check.passed);
+    onResult(passed);
+    if (passed) {
       announce(
         'M1 passed. The code is issuer-bound, exact-redirected, unused, unexpired, and S256-bound.',
       );
     } else announce(`${next.filter((check) => !check.passed).length} flow checks need repair.`);
   };
-  const replay = () => {
+  const replay = async () => {
     setConfig((current) => ({ ...current, codeUsed: true }));
-    const next = checkPkceFlow({ ...config, codeUsed: true });
+    const next = await checkPkceFlow({ ...config, codeUsed: true });
     setChecks(next);
+    onResult(false);
     announce('Replay rejected: code_demo_7K2 was already consumed.');
   };
   return (
@@ -459,6 +463,7 @@ function PkceComposer({
             ['state', 'state'],
             ['challengeMethod', 'code_challenge_method'],
             ['verifier', 'code_verifier'],
+            ['codeChallenge', 'code_challenge'],
           ].map(([key, label]) => (
             <label key={key}>
               {label}
@@ -488,10 +493,10 @@ function PkceComposer({
 }
 
 function ScopeLab({
-  onPass,
+  onResult,
   announce,
 }: {
-  onPass: () => void;
+  onResult: (passed: boolean) => void;
   announce: (message: string) => void;
 }) {
   const scopes = ['openid', 'notes.read', 'notes.write', 'profile'];
@@ -506,8 +511,9 @@ function ScopeLab({
   const run = () => {
     const next = checkScopeSelection({ requested, granted, denied, resource, audience });
     setChecks(next);
-    if (next.every((check) => check.passed)) {
-      onPass();
+    const passed = next.every((check) => check.passed);
+    onResult(passed);
+    if (passed) {
       announce('M2 passed. Read note succeeds with zero unnecessary permissions.');
     } else announce('Scope set needs repair. Check the named permission and audience.');
   };
@@ -575,10 +581,10 @@ function ScopeLab({
 }
 
 function TokenLab({
-  onPass,
+  onResult,
   announce,
 }: {
-  onPass: () => void;
+  onResult: (passed: boolean) => void;
   announce: (message: string) => void;
 }) {
   const [token, setToken] = useState(SYNTHETIC_ID_TOKEN);
@@ -595,6 +601,7 @@ function TokenLab({
   };
   const run = () => {
     if (!decoded) {
+      onResult(false);
       announce('Decode the synthetic fixture first.');
       return;
     }
@@ -623,8 +630,9 @@ function TokenLab({
       trace: 'trace_local_019',
     });
     setChecks(next);
-    if (next.every((check) => check.passed)) {
-      onPass();
+    const passed = next.every((check) => check.passed);
+    onResult(passed);
+    if (passed) {
       announce('M3 passed. Claims classified; signature remains unverified.');
     } else announce('Token inspection needs repair.');
   };
@@ -690,10 +698,10 @@ function TokenLab({
 }
 
 function IdentityLab({
-  onPass,
+  onResult,
   announce,
 }: {
-  onPass: () => void;
+  onResult: (passed: boolean) => void;
   announce: (message: string) => void;
 }) {
   const [metadata, setMetadata] = useState<typeof DISCOVERY_FIXTURE | null>(null);
@@ -702,8 +710,10 @@ function IdentityLab({
   const [nonce, setNonce] = useState('nonce_local_N42');
   const [session, setSession] = useState(false);
   const [checks, setChecks] = useState<CheckResult[]>([]);
+  const scenarioSubject = subjectType === 'public' ? 'user_ada' : 'pair_ada_notes';
   const run = () => {
     if (!metadata) {
+      onResult(false);
       announce('Load the local metadata fixture first.');
       return;
     }
@@ -720,16 +730,16 @@ function IdentityLab({
       {
         id: 'subject',
         label: 'UserInfo subject',
-        expected: 'user_ada equals ID token sub',
-        observed: `${userinfoSub} ↔ user_ada`,
-        passed: userinfoSub === 'user_ada',
+        expected: `${scenarioSubject} equals ID token sub`,
+        observed: `${userinfoSub} ↔ ${scenarioSubject}`,
+        passed: userinfoSub === scenarioSubject,
         trace: 'trace_local_026',
       },
       {
         id: 'session',
         label: 'Local session event',
         expected: 'session started',
-        observed: session ? 'start · user_ada' : 'not started',
+        observed: session ? `start · ${scenarioSubject}` : 'not started',
         passed: session,
         trace: 'trace_local_027',
       },
@@ -743,8 +753,9 @@ function IdentityLab({
       },
     ];
     setChecks(next);
-    if (next.every((check) => check.passed)) {
-      onPass();
+    const passed = next.every((check) => check.passed);
+    onResult(passed);
+    if (passed) {
       announce(
         'M4 passed. Metadata, nonce, subject, and local session share one issuer-bound trace.',
       );
@@ -796,7 +807,11 @@ function IdentityLab({
             Subject type
             <select
               value={subjectType}
-              onChange={(event) => setSubjectType(event.target.value as 'public' | 'pairwise')}
+              onChange={(event) => {
+                const nextType = event.target.value as 'public' | 'pairwise';
+                setSubjectType(nextType);
+                setUserinfoSub(nextType === 'public' ? 'user_ada' : 'pair_ada_notes');
+              }}
             >
               <option value="public">public · user_ada</option>
               <option value="pairwise">pairwise · pair_ada_notes</option>
@@ -805,7 +820,7 @@ function IdentityLab({
         </article>
         <article>
           <span className="eyebrow">05 · SESSION</span>
-          <strong>{session ? 'START · user_ada' : 'No local session'}</strong>
+          <strong>{session ? `START · ${scenarioSubject}` : 'No local session'}</strong>
           <button className="secondary" onClick={() => setSession(!session)}>
             {session ? 'End local session' : 'Start local session'}
           </button>
@@ -817,10 +832,10 @@ function IdentityLab({
 }
 
 function ThreatArcade({
-  onPass,
+  onResult,
   announce,
 }: {
-  onPass: () => void;
+  onResult: (passed: boolean) => void;
   announce: (message: string) => void;
 }) {
   const [selected, setSelected] = useState(THREATS[0]);
@@ -837,7 +852,7 @@ function ThreatArcade({
     const all = THREATS.every(
       (threat) => repairs[threat.id] || (threat.id === selected.id && safe),
     );
-    if (all) onPass();
+    onResult(all);
   };
   return (
     <div className="module" id="trace_local_030">
@@ -927,32 +942,43 @@ function ThreatArcade({
 }
 
 function SchemaBench({
-  onPass,
+  onResult,
   announce,
 }: {
-  onPass: () => void;
+  onResult: (passed: boolean) => void;
   announce: (message: string) => void;
 }) {
-  const [pane, setPane] = useState<'http' | 'json' | 'diff'>('http');
-  const [httpHistory, setHttpHistory] = useState([INITIAL_HTTP]);
-  const [jsonHistory, setJsonHistory] = useState([INITIAL_JSON]);
+  type Pane = 'http' | 'json' | 'diff';
+  const panes: Pane[] = ['http', 'json', 'diff'];
+  const [pane, setPane] = useState<Pane>('http');
+  const tabRefs = useRef<Partial<Record<Pane, HTMLButtonElement | null>>>({});
+  const [history, setHistory] = useState([{ http: INITIAL_HTTP, json: INITIAL_JSON }]);
   const [position, setPosition] = useState(0);
-  const http = httpHistory[Math.min(position, httpHistory.length - 1)] ?? INITIAL_HTTP;
-  const json = jsonHistory[Math.min(position, jsonHistory.length - 1)] ?? INITIAL_JSON;
+  const snapshot = history[position] ?? history[0];
+  const http = snapshot.http;
+  const json = snapshot.json;
   const [checks, setChecks] = useState<CheckResult[]>([]);
   const edit = (kind: 'http' | 'json', value: string) => {
-    if (kind === 'http') setHttpHistory([...httpHistory.slice(0, position + 1), value]);
-    else setJsonHistory([...jsonHistory.slice(0, position + 1), value]);
+    const nextSnapshot = { ...snapshot, [kind]: value };
+    setHistory([...history.slice(0, position + 1), nextSnapshot]);
     setPosition(position + 1);
   };
   const run = () => {
     let parsed = false;
+    let parsedJson: Record<string, unknown> = {};
     try {
-      JSON.parse(json);
+      const value: unknown = JSON.parse(json);
       parsed = true;
+      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        parsedJson = value as Record<string, unknown>;
+      }
     } catch {
       parsed = false;
     }
+    const schemaMatches =
+      parsedJson.issuer === 'https://op.local' &&
+      parsedJson.audience === 'api://notes' &&
+      parsedJson.subject === 'user_ada';
     const next: CheckResult[] = [
       {
         id: 'http-syntax',
@@ -974,19 +1000,15 @@ function SchemaBench({
         id: 'json-schema',
         label: 'Local schema',
         expected: 'issuer, audience, subject',
-        observed:
-          parsed && json.includes('api://notes') ? 'all fields match' : 'schema field mismatch',
-        passed:
-          parsed &&
-          json.includes('https://op.local') &&
-          json.includes('api://notes') &&
-          json.includes('user_ada'),
+        observed: parsed && schemaMatches ? 'all fields match' : 'schema field mismatch',
+        passed: parsed && schemaMatches,
         trace: 'trace_local_052',
       },
     ];
     setChecks(next);
-    if (next.every((check) => check.passed)) {
-      onPass();
+    const passed = next.every((check) => check.passed);
+    onResult(passed);
+    if (passed) {
       announce('M6 passed. Local parse, schema, and deterministic response checks pass.');
     } else announce('Bench needs repair. Syntax and schema diagnostics are listed separately.');
   };
@@ -996,8 +1018,7 @@ function SchemaBench({
       !globalThis.confirm('Reset both editors to the deterministic local fixture?')
     )
       return;
-    setHttpHistory([INITIAL_HTTP]);
-    setJsonHistory([INITIAL_JSON]);
+    setHistory([{ http: INITIAL_HTTP, json: INITIAL_JSON }]);
     setPosition(0);
     announce('Deterministic local fixture restored.');
   };
@@ -1009,12 +1030,35 @@ function SchemaBench({
     <div className="module schema-bench" id="trace_local_050">
       <div className="module-toolbar">
         <div className="tabs" role="tablist" aria-label="Schema bench panes">
-          {(['http', 'json', 'diff'] as const).map((item) => (
+          {panes.map((item) => (
             <button
               role="tab"
+              id={`schema-tab-${item}`}
+              aria-controls={`schema-panel-${item}`}
               aria-selected={pane === item}
+              tabIndex={pane === item ? 0 : -1}
+              ref={(node) => {
+                tabRefs.current[item] = node;
+              }}
               key={item}
               onClick={() => setPane(item)}
+              onKeyDown={(event) => {
+                const currentIndex = panes.indexOf(item);
+                const nextPane =
+                  event.key === 'Home'
+                    ? panes[0]
+                    : event.key === 'End'
+                      ? panes[panes.length - 1]
+                      : event.key === 'ArrowRight'
+                        ? panes[(currentIndex + 1) % panes.length]
+                        : event.key === 'ArrowLeft'
+                          ? panes[(currentIndex - 1 + panes.length) % panes.length]
+                          : null;
+                if (!nextPane) return;
+                event.preventDefault();
+                setPane(nextPane);
+                requestAnimationFrame(() => tabRefs.current[nextPane]?.focus());
+              }}
             >
               {item.toUpperCase()}
             </button>
@@ -1029,7 +1073,7 @@ function SchemaBench({
         </button>
         <button
           className="secondary"
-          disabled={position >= Math.max(httpHistory.length, jsonHistory.length) - 1}
+          disabled={position >= history.length - 1}
           onClick={() => setPosition(position + 1)}
         >
           Redo
@@ -1043,7 +1087,12 @@ function SchemaBench({
         <RunButton onClick={run} />
       </div>
       {pane === 'http' && (
-        <label className="code-pane">
+        <label
+          className="code-pane"
+          role="tabpanel"
+          id="schema-panel-http"
+          aria-labelledby="schema-tab-http"
+        >
           <span>HTTP editor · line 1</span>
           <textarea
             value={http}
@@ -1053,7 +1102,12 @@ function SchemaBench({
         </label>
       )}
       {pane === 'json' && (
-        <label className="code-pane">
+        <label
+          className="code-pane"
+          role="tabpanel"
+          id="schema-panel-json"
+          aria-labelledby="schema-tab-json"
+        >
           <span>JSON editor · local schema</span>
           <textarea
             value={json}
@@ -1063,7 +1117,12 @@ function SchemaBench({
         </label>
       )}
       {pane === 'diff' && (
-        <div className="diff-view">
+        <div
+          className="diff-view"
+          role="tabpanel"
+          id="schema-panel-diff"
+          aria-labelledby="schema-tab-diff"
+        >
           <div>
             <span className="eyebrow">RESET BASELINE</span>
             <pre>
@@ -1086,27 +1145,33 @@ function SchemaBench({
 }
 
 function Capstone({
-  onPass,
+  onResult,
   announce,
   progress,
 }: {
-  onPass: () => void;
+  onResult: (passed: boolean) => void;
   announce: (message: string) => void;
   progress: Progress;
 }) {
   const [repairs, setRepairs] = useState<Record<string, boolean>>({});
   const [checks, setChecks] = useState<CheckResult[]>([]);
-  const [seed, setSeed] = useState('FORGE-7K2-05');
+  const [seed, setSeed] = useState<'FORGE-7K2-05' | 'FORGE-I42-05'>('FORGE-7K2-05');
+  const faults = CAPSTONE_SCENARIOS[seed];
   const prerequisites = MILESTONES.slice(0, 7).filter(
     (milestone) => progress[milestone.id] !== 'passed',
   );
   const run = () => {
-    const next = checkCapstone(repairs);
+    const next = checkCapstone(repairs, faults);
     setChecks(next);
-    if (next.every((check) => check.passed)) {
-      onPass();
+    const passed = prerequisites.length === 0 && next.every((check) => check.passed);
+    onResult(passed);
+    if (passed) {
       announce(
         'Capstone passed. Zero critical faults; five threat families repaired. Signature verification remains outside this UI.',
+      );
+    } else if (prerequisites.length) {
+      announce(
+        `Capstone blocked. Repair ${prerequisites.map((item) => item.id).join(', ')} first.`,
       );
     } else
       announce(`${next.filter((check) => !check.passed).length} critical capstone checks remain.`);
@@ -1129,8 +1194,8 @@ function Capstone({
       </div>
       {prerequisites.length > 0 && (
         <div className="advisory">
-          Practice gates available: {prerequisites.map((item) => item.id).join(', ')}. Capstone
-          remains explorable locally.
+          Prerequisites missing: {prerequisites.map((item) => item.id).join(', ')}. Repair these
+          gates before the capstone can pass.
         </div>
       )}
       <div className="forge-trace">
@@ -1158,7 +1223,7 @@ function Capstone({
         )}
       </div>
       <div className="fault-grid">
-        {CAPSTONE_FAULTS.map((fault) => (
+        {faults.map((fault) => (
           <label key={fault.id} className={repairs[fault.id] ? 'repaired' : ''}>
             <input
               type="checkbox"
@@ -1255,6 +1320,9 @@ export function App() {
   const [resetOpen, setResetOpen] = useState(false);
   const [resetPhrase, setResetPhrase] = useState('');
   const mainRef = useRef<HTMLElement>(null);
+  const resetDialogRef = useRef<HTMLDivElement>(null);
+  const resetInputRef = useRef<HTMLInputElement>(null);
+  const resetOpenerRef = useRef<HTMLButtonElement>(null);
   const milestone = MILESTONES.find((item) => item.id === active) ?? MILESTONES[0];
   const status = progress[active] ?? 'not started';
   const passedCount = useMemo(
@@ -1268,7 +1336,54 @@ export function App() {
   useEffect(() => {
     if (!progress[active]) mark(active, 'in progress');
   }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
-  const pass = () => mark(active, 'passed');
+  useEffect(() => {
+    if (!resetOpen) return;
+    requestAnimationFrame(() => resetInputRef.current?.focus());
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setResetOpen(false);
+        setResetPhrase('');
+        requestAnimationFrame(() => resetOpenerRef.current?.focus());
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = Array.from(
+        resetDialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [resetOpen]);
+  const closeReset = () => {
+    setResetOpen(false);
+    setResetPhrase('');
+    requestAnimationFrame(() => resetOpenerRef.current?.focus());
+  };
+  const recordResult = (id: MilestoneId, passed: boolean) => {
+    setProgress((current) => {
+      const next: Progress = { ...current, [id]: passed ? 'passed' : 'needs repair' };
+      if (!passed) {
+        const failedIndex = MILESTONES.findIndex((item) => item.id === id);
+        for (const downstream of MILESTONES.slice(failedIndex + 1)) {
+          if (current[downstream.id] === 'passed') next[downstream.id] = 'needs repair';
+        }
+      }
+      return next;
+    });
+  };
   const selectMilestone = (id: MilestoneId) => {
     setActive(id);
     setAnnouncement(`${id} selected. ${MILESTONES.find((item) => item.id === id)?.prompt}`);
@@ -1301,7 +1416,11 @@ export function App() {
           >
             {theme === 'light' ? '◐' : '○'}
           </button>
-          <button className="secondary compact" onClick={() => setResetOpen(true)}>
+          <button
+            ref={resetOpenerRef}
+            className="secondary compact"
+            onClick={() => setResetOpen(true)}
+          >
             Reset all
           </button>
         </div>
@@ -1354,15 +1473,54 @@ export function App() {
           </div>
         </section>
         <section className="bench-surface" aria-label={`${milestone.title} interactive bench`}>
-          {active === 'M0' && <TrustMap onPass={pass} announce={setAnnouncement} />}
-          {active === 'M1' && <PkceComposer onPass={pass} announce={setAnnouncement} />}
-          {active === 'M2' && <ScopeLab onPass={pass} announce={setAnnouncement} />}
-          {active === 'M3' && <TokenLab onPass={pass} announce={setAnnouncement} />}
-          {active === 'M4' && <IdentityLab onPass={pass} announce={setAnnouncement} />}
-          {active === 'M5' && <ThreatArcade onPass={pass} announce={setAnnouncement} />}
-          {active === 'M6' && <SchemaBench onPass={pass} announce={setAnnouncement} />}
+          {active === 'M0' && (
+            <TrustMap
+              onResult={(passed) => recordResult('M0', passed)}
+              announce={setAnnouncement}
+            />
+          )}
+          {active === 'M1' && (
+            <PkceComposer
+              onResult={(passed) => recordResult('M1', passed)}
+              announce={setAnnouncement}
+            />
+          )}
+          {active === 'M2' && (
+            <ScopeLab
+              onResult={(passed) => recordResult('M2', passed)}
+              announce={setAnnouncement}
+            />
+          )}
+          {active === 'M3' && (
+            <TokenLab
+              onResult={(passed) => recordResult('M3', passed)}
+              announce={setAnnouncement}
+            />
+          )}
+          {active === 'M4' && (
+            <IdentityLab
+              onResult={(passed) => recordResult('M4', passed)}
+              announce={setAnnouncement}
+            />
+          )}
+          {active === 'M5' && (
+            <ThreatArcade
+              onResult={(passed) => recordResult('M5', passed)}
+              announce={setAnnouncement}
+            />
+          )}
+          {active === 'M6' && (
+            <SchemaBench
+              onResult={(passed) => recordResult('M6', passed)}
+              announce={setAnnouncement}
+            />
+          )}
           {active === 'M7' && (
-            <Capstone onPass={pass} announce={setAnnouncement} progress={progress} />
+            <Capstone
+              onResult={(passed) => recordResult('M7', passed)}
+              announce={setAnnouncement}
+              progress={progress}
+            />
           )}
         </section>
         <section id="references" className="references" aria-label="Protocol references">
@@ -1406,7 +1564,13 @@ export function App() {
       </nav>
       {resetOpen && (
         <div className="dialog-backdrop" role="presentation">
-          <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="reset-title">
+          <div
+            className="dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reset-title"
+            ref={resetDialogRef}
+          >
             <span className="eyebrow">IRREVERSIBLE LOCAL ACTION</span>
             <h2 id="reset-title">Reset all progress?</h2>
             <p>This clears gate evidence on this device. Recovery is unavailable.</p>
@@ -1414,18 +1578,13 @@ export function App() {
               Type <strong>RESET LOCAL</strong>
               <input
                 autoFocus
+                ref={resetInputRef}
                 value={resetPhrase}
                 onChange={(event) => setResetPhrase(event.target.value)}
               />
             </label>
             <div>
-              <button
-                className="secondary"
-                onClick={() => {
-                  setResetOpen(false);
-                  setResetPhrase('');
-                }}
-              >
+              <button className="secondary" onClick={closeReset}>
                 Cancel
               </button>
               <button
@@ -1433,8 +1592,7 @@ export function App() {
                 disabled={resetPhrase !== 'RESET LOCAL'}
                 onClick={() => {
                   setProgress({});
-                  setResetOpen(false);
-                  setResetPhrase('');
+                  closeReset();
                   setAnnouncement('All local progress reset.');
                 }}
               >

@@ -107,6 +107,44 @@ test('preserves state and focus with reduced motion', async ({ page }) => {
   await expect(page.getByTestId('sequence-message').nth(1)).toContainText('GET /authorize');
 });
 
+test('uses roving focus and arrow navigation for schema bench tabs', async ({ page }) => {
+  await milestone(page, 'M6').click();
+  const http = page.getByRole('tab', { name: 'HTTP' });
+  const json = page.getByRole('tab', { name: 'JSON' });
+  const diff = page.getByRole('tab', { name: 'DIFF' });
+
+  await expect(http).toHaveAttribute('tabindex', '0');
+  await expect(json).toHaveAttribute('tabindex', '-1');
+  await expect(diff).toHaveAttribute('tabindex', '-1');
+  await http.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(json).toBeFocused();
+  await expect(json).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('End');
+  await expect(diff).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(http).toBeFocused();
+});
+
+test('traps reset focus, closes on Escape, and restores the opener', async ({ page }) => {
+  const opener = page.getByRole('button', { name: 'Reset all' });
+  await opener.click();
+  const phrase = page.getByLabel(/Type RESET LOCAL/);
+  const cancel = page.getByRole('button', { name: 'Cancel' });
+  const confirm = page.getByRole('button', { name: 'Reset local progress' });
+
+  await expect(phrase).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(cancel).toBeFocused();
+  await phrase.fill('RESET LOCAL');
+  await confirm.focus();
+  await page.keyboard.press('Tab');
+  await expect(phrase).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(opener).toBeFocused();
+});
+
 test('keeps skip navigation and dark theme accessible', async ({ page, browserName }) => {
   if (browserName !== 'webkit') {
     await page.keyboard.press('Tab');

@@ -10,33 +10,73 @@ import {
 } from '../src/protocol';
 
 describe('protocol simulations', () => {
-  it('accepts a complete Authorization Code plus S256 PKCE trace and rejects replay', () => {
-    expect(
-      checkPkceFlow({
-        responseType: 'code',
-        clientId: 'client_notes_web',
-        redirectUri: 'https://client.local/callback',
-        scope: 'openid notes.read',
-        state: 'state_local_9X4',
-        challengeMethod: 'S256',
-        verifier: 'verifier_local_43_characters_demo_only_7K2X',
-        codeUsed: false,
-        codeExpired: false,
-      }).every((check) => check.passed),
-    ).toBe(true);
+  it.each([
+    ['too short', 'a'.repeat(42)],
+    ['too long', 'a'.repeat(129)],
+    ['whitespace', `${'a'.repeat(42)} `],
+    ['reserved character', `${'a'.repeat(42)}!`],
+  ])('rejects a PKCE verifier with %s syntax', async (_case, verifier) => {
+    const checks = await checkPkceFlow({
+      responseType: 'code',
+      clientId: 'client_notes_web',
+      redirectUri: 'https://client.local/callback',
+      scope: 'openid notes.read',
+      state: 'state_local_9X4',
+      challengeMethod: 'S256',
+      verifier,
+      codeChallenge: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+      codeUsed: false,
+      codeExpired: false,
+    });
 
+    expect(checks.find((check) => check.id === 'pkce-verifier')?.passed).toBe(false);
+  });
+
+  it('derives and compares the RFC 7636 S256 code challenge', async () => {
+    const verifier = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
+    const base = {
+      responseType: 'code',
+      clientId: 'client_notes_web',
+      redirectUri: 'https://client.local/callback',
+      scope: 'openid notes.read',
+      state: 'state_local_9X4',
+      challengeMethod: 'S256',
+      verifier,
+      codeUsed: false,
+      codeExpired: false,
+    };
+    const matching = await checkPkceFlow({
+      ...base,
+      codeChallenge: 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM',
+    });
+    const mismatched = await checkPkceFlow({
+      ...base,
+      codeChallenge: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+    });
+
+    expect(matching.find((check) => check.id === 'pkce-challenge')?.passed).toBe(true);
+    expect(mismatched.find((check) => check.id === 'pkce-challenge')?.passed).toBe(false);
+  });
+
+  it('accepts a complete Authorization Code plus S256 PKCE trace and rejects replay', async () => {
+    const config = {
+      responseType: 'code',
+      clientId: 'client_notes_web',
+      redirectUri: 'https://client.local/callback',
+      scope: 'openid notes.read',
+      state: 'state_local_9X4',
+      challengeMethod: 'S256',
+      verifier: 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk',
+      codeChallenge: 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM',
+      codeUsed: false,
+      codeExpired: false,
+    };
+
+    expect((await checkPkceFlow(config)).every((check) => check.passed)).toBe(true);
     expect(
-      checkPkceFlow({
-        responseType: 'code',
-        clientId: 'client_notes_web',
-        redirectUri: 'https://client.local/callback',
-        scope: 'openid notes.read',
-        state: 'state_local_9X4',
-        challengeMethod: 'S256',
-        verifier: 'verifier_local_43_characters_demo_only_7K2X',
-        codeUsed: true,
-        codeExpired: false,
-      }).find((check) => check.id === 'single-use')?.passed,
+      (await checkPkceFlow({ ...config, codeUsed: true })).find(
+        (check) => check.id === 'single-use',
+      )?.passed,
     ).toBe(false);
   });
 
