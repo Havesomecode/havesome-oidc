@@ -17,3 +17,13 @@ describe('static asset closure', () => {
     }
   });
 });
+
+describe('contrast-safe motion', () => {
+  it('keeps active-message colors fully opaque throughout the arrival animation', () => {
+    const css = readFileSync(resolve('src/styles.css'), 'utf8');
+    const animation = css.match(/@keyframes message-arrive\s*\{[\s\S]*?\n\}/)?.[0];
+
+    expect(animation).toBeDefined();
+    expect(animation).not.toMatch(/\bopacity\s*:/);
+  });
+});
