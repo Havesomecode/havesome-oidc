@@ -4,25 +4,6 @@ import { expect, test } from '@playwright/test';
 const milestone = (page: import('@playwright/test').Page, id: string) =>
   page.getByRole('button', { name: new RegExp(`^${id}`) });
 
-const emulateStickyHeaderFocusScroll = (page: import('@playwright/test').Page) =>
-  page.evaluate(() => {
-    // Normalize the reviewed 53px focus scroll so the geometry regression is engine-stable.
-    const nativeFocus = HTMLElement.prototype.focus;
-    HTMLElement.prototype.focus = function focus(options?: FocusOptions) {
-      nativeFocus.call(this, options);
-      if (this.id === 'main' && !options?.preventScroll) window.scrollTo(0, 53);
-    };
-  });
-
-const emulateMobileFocusScroll = (page: import('@playwright/test').Page) =>
-  page.evaluate(() => {
-    const nativeFocus = HTMLElement.prototype.focus;
-    HTMLElement.prototype.focus = function focus(options?: FocusOptions) {
-      nativeFocus.call(this, options);
-      if (this.id === 'main' && !options?.preventScroll) this.scrollIntoView();
-    };
-  });
-
 const expectDesktopHeadingsBelowHeader = async (page: import('@playwright/test').Page) => {
   const geometry = await page.evaluate(() => ({
     headerBottom: document.querySelector('.product-header')!.getBoundingClientRect().bottom,
@@ -134,7 +115,6 @@ test('keeps desktop headings below the sticky header after pointer milestone sel
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await emulateStickyHeaderFocusScroll(page);
   await milestone(page, 'M5').click();
 
   await expect(page.getByRole('heading', { name: 'Threat arcade', level: 1 })).toBeVisible();
@@ -146,7 +126,6 @@ test('keeps desktop headings below the sticky header after keyboard milestone se
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await emulateStickyHeaderFocusScroll(page);
   await milestone(page, 'M5').focus();
   await page.keyboard.press('Enter');
 
@@ -155,26 +134,38 @@ test('keeps desktop headings below the sticky header after keyboard milestone se
   await expectDesktopHeadingsBelowHeader(page);
 });
 
-for (const width of [390, 320]) {
-  test(`keeps the focused task visible after mobile milestone selection at ${width}px`, async ({
+for (const { width, interaction } of [
+  { width: 390, interaction: 'pointer' },
+  { width: 320, interaction: 'keyboard' },
+] as const) {
+  test(`natively focuses the task heading below the mobile rail after ${interaction} selection at ${width}px`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 844 });
-    await emulateMobileFocusScroll(page);
     await milestone(page, 'M5').click();
     await page.evaluate(() => window.scrollTo(0, 1000));
 
     const target = milestone(page, 'M4');
-    if (width === 390) await target.click();
+    if (interaction === 'pointer') await target.click();
     else {
       await target.focus();
       await page.keyboard.press('Enter');
     }
 
-    await expect(page.locator('#main')).toBeFocused();
-    await expect(
-      page.getByRole('heading', { name: 'OIDC identity lab', level: 1 }),
-    ).toBeInViewport();
+    const heading = page.getByRole('heading', { name: 'OIDC identity lab', level: 1 });
+    await expect(heading).toBeFocused();
+
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () =>
+              document.querySelector('.task-header h1')!.getBoundingClientRect().top -
+              document.querySelector('.milestone-rail')!.getBoundingClientRect().bottom,
+          ),
+        { message: 'selected task heading clears the sticky rail' },
+      )
+      .toBeGreaterThanOrEqual(0);
   });
 }
 

@@ -1320,6 +1320,7 @@ export function App() {
   const [resetOpen, setResetOpen] = useState(false);
   const [resetPhrase, setResetPhrase] = useState('');
   const mainRef = useRef<HTMLElement>(null);
+  const taskHeadingRef = useRef<HTMLHeadingElement>(null);
   const resetDialogRef = useRef<HTMLDivElement>(null);
   const resetInputRef = useRef<HTMLInputElement>(null);
   const resetOpenerRef = useRef<HTMLButtonElement>(null);
@@ -1390,8 +1391,11 @@ export function App() {
     requestAnimationFrame(() => {
       const main = mainRef.current;
       if (!main) return;
-      if (window.innerWidth >= 900) main.focus({ preventScroll: true });
-      else main.focus();
+      if (window.innerWidth >= 900) {
+        main.focus({ preventScroll: true });
+        return;
+      }
+      taskHeadingRef.current?.focus();
     });
   };
   return (
@@ -1466,7 +1470,9 @@ export function App() {
             <span className="eyebrow">
               {milestone.id} · {milestone.verb.toUpperCase()}
             </span>
-            <h1>{milestone.title}</h1>
+            <h1 ref={taskHeadingRef} tabIndex={-1}>
+              {milestone.title}
+            </h1>
             <p>{milestone.prompt}</p>
           </div>
           <div className={`gate-status ${status.replaceAll(' ', '-')}`}>
