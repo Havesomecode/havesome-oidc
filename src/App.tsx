@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import {
   CAPSTONE_SCENARIOS,
   DISCOVERY_FIXTURE,
@@ -23,6 +23,8 @@ type Milestone = {
   verb: string;
   title: string;
   prompt: string;
+  action: string;
+  success: string;
   trace: string;
 };
 
@@ -31,7 +33,9 @@ const MILESTONES: Milestone[] = [
     id: 'M0',
     verb: 'Orient',
     title: 'Cast + trust map',
-    prompt: 'Place six actors. Keep the attacker outside trusted zones.',
+    prompt: 'Move the misplaced Client into the trusted server-side app.',
+    action: 'Select an actor card, choose its zone, then check all six placements.',
+    success: 'Every actor is in its real trust zone and the attacker remains untrusted.',
     trace: 'trace_local_001',
   },
   {
@@ -39,6 +43,8 @@ const MILESTONES: Milestone[] = [
     verb: 'Compose',
     title: 'Authorization Code + PKCE',
     prompt: 'Build the front channel, then redeem one code with S256.',
+    action: 'Order the five messages, keep response_type=code and PKCE=S256, then run checks.',
+    success: 'The redirect, one-time code, exact callback, and S256 verifier all validate.',
     trace: 'trace_local_006',
   },
   {
@@ -46,6 +52,8 @@ const MILESTONES: Milestone[] = [
     verb: 'Minimize',
     title: 'Scope + consent',
     prompt: 'Grant only what reading one note needs.',
+    action: 'Compare the requested scopes, remove excess access, then run checks.',
+    success: 'The grant allows one note read without unrelated identity or write access.',
     trace: 'trace_local_008',
   },
   {
@@ -53,6 +61,8 @@ const MILESTONES: Milestone[] = [
     verb: 'Inspect',
     title: 'Tokens + claims',
     prompt: 'Decode the fixture. Classify claims without trusting the signature.',
+    action: 'Decode for inspection, classify the claims, acknowledge the trust limit, then accept.',
+    success: 'Claims are classified while decode-only output remains explicitly untrusted.',
     trace: 'trace_local_014',
   },
   {
@@ -60,6 +70,8 @@ const MILESTONES: Milestone[] = [
     verb: 'Identify',
     title: 'OIDC identity lab',
     prompt: 'Build one issuer-bound identity trace from metadata to session.',
+    action: 'Load metadata, start the local session, inspect the trace, then run checks.',
+    success: 'Issuer, client, nonce, signature inputs, and session binding all agree.',
     trace: 'trace_local_020',
   },
   {
@@ -67,6 +79,8 @@ const MILESTONES: Milestone[] = [
     verb: 'Defend',
     title: 'Threat arcade',
     prompt: 'Repair nine deterministic protocol attacks.',
+    action: 'Open each challenge, enable the safe repair, then predict the outcome.',
+    success: 'All nine attacks are rejected or safely contained.',
     trace: 'trace_local_030',
   },
   {
@@ -74,6 +88,9 @@ const MILESTONES: Milestone[] = [
     verb: 'Operate',
     title: 'Terminal + schema bench',
     prompt: 'Repair the exchange. Compare, undo, copy, and reset locally.',
+    action:
+      'Edit the HTTP and JSON fixtures, use the local tools to inspect changes, then run checks.',
+    success: 'The request and schema agree on the expected protocol fields and values.',
     trace: 'trace_local_050',
   },
   {
@@ -81,6 +98,8 @@ const MILESTONES: Milestone[] = [
     verb: 'Forge',
     title: 'Secure capstone',
     prompt: 'Repair five faults, then produce a complete evidence trace.',
+    action: 'Resolve every fault toggle, review the resulting trace, then run all checks.',
+    success: 'All five repairs hold and the complete evidence trace passes.',
     trace: 'trace_local_100',
   },
 ];
@@ -93,6 +112,58 @@ const ACTORS = [
   { id: 'api', mark: 'API', name: 'Resource Server / API', expected: 'Resource boundary' },
   { id: 'attacker', mark: '!', name: 'Attacker proxy', expected: 'Untrusted network' },
 ];
+
+const TRUST_ZONES = [
+  {
+    id: 'Browser session',
+    label: 'Browser session',
+    detail: 'The person and user agent. Front-channel redirects are visible here.',
+  },
+  {
+    id: 'Trusted application',
+    label: 'Trusted application',
+    detail: 'The server-side Client keeps transaction state and redeems the code here.',
+  },
+  {
+    id: 'Issuer boundary',
+    label: 'Issuer boundary',
+    detail: 'The Authorization Server / OP authenticates and issues results.',
+  },
+  {
+    id: 'Resource boundary',
+    label: 'Resource boundary',
+    detail: 'The protected API accepts access tokens for its own audience.',
+  },
+  {
+    id: 'Untrusted network',
+    label: 'Untrusted network',
+    detail: 'Attackers and intermediaries never become trusted protocol actors.',
+  },
+] as const;
+
+const TRUST_ZONE_STORAGE_KEY = 'protocol-workbench-trust-zones';
+const CORRECT_TRUST_ZONES: Record<string, string> = Object.fromEntries(
+  ACTORS.map((actor) => [actor.id, actor.expected]),
+);
+const initialTrustZones = () => ({ ...CORRECT_TRUST_ZONES, client: 'Browser session' });
+const loadTrustZones = (m0Passed: boolean) => {
+  if (m0Passed) return { ...CORRECT_TRUST_ZONES };
+  try {
+    const saved = JSON.parse(localStorage.getItem(TRUST_ZONE_STORAGE_KEY) ?? 'null') as unknown;
+    if (
+      saved &&
+      typeof saved === 'object' &&
+      ACTORS.every((actor) =>
+        TRUST_ZONES.some((zone) => zone.id === (saved as Record<string, unknown>)[actor.id]),
+      )
+    ) {
+      return saved as Record<string, string>;
+    }
+  } catch {
+    // Invalid local state falls back to the guided starting challenge.
+  }
+  return initialTrustZones();
+};
 
 const SEQUENCE = [
   {
@@ -469,19 +540,22 @@ function RunButton({
 }
 
 function TrustMap({
+  zones,
+  setZones,
   onResult,
   announce,
 }: {
+  zones: Record<string, string>;
+  setZones: Dispatch<SetStateAction<Record<string, string>>>;
   onResult: (passed: boolean) => void;
   announce: (message: string) => void;
 }) {
-  const [zones, setZones] = useState<Record<string, string>>(() =>
-    Object.fromEntries(
-      ACTORS.map((actor) => [actor.id, actor.id === 'client' ? 'Browser session' : actor.expected]),
-    ),
-  );
   const [checks, setChecks] = useState<CheckResult[]>([]);
   const [selected, setSelected] = useState('client');
+  const [hintVisible, setHintVisible] = useState(false);
+  const [lastResult, setLastResult] = useState<'passed' | 'needs repair' | null>(null);
+  const selectedActor = ACTORS.find((actor) => actor.id === selected) ?? ACTORS[0];
+  const misplacedCount = ACTORS.filter((actor) => zones[actor.id] !== actor.expected).length;
   const checkMap = () => {
     const actorChecks = ACTORS.map((actor, index) => ({
       id: `actor-${actor.id}`,
@@ -512,6 +586,7 @@ function TrustMap({
     const next = [...actorChecks, ...routeChecks];
     setChecks(next);
     const passed = next.every((item) => item.passed);
+    setLastResult(passed ? 'passed' : 'needs repair');
     onResult(passed);
     if (passed) {
       announce('M0 passed. Six actors and both channel types satisfy their trust boundaries.');
@@ -523,89 +598,141 @@ function TrustMap({
   };
   return (
     <div className="module" id="trace_local_001">
-      <ol className="instruction-strip" aria-label="Trust map instructions">
-        <li>1. Select an actor</li>
-        <li>2. Choose its zone</li>
-        <li>3. Check the map</li>
-      </ol>
-      <div className="module-toolbar">
-        <span className="local-chip">6 ACTORS · 2 BOUNDARIES</span>
-        <button
-          className="secondary"
-          onClick={() =>
-            announce(
-              'Hint: keep browser actors together; attacker stays outside every trusted zone.',
-            )
-          }
-        >
-          Hint
-        </button>
-        <RunButton onClick={checkMap}>Check map</RunButton>
-      </div>
-      <div
-        className="trust-map"
-        role="group"
-        aria-label="Actor trust map. Select an actor, then choose its zone."
-      >
-        <div className="boundary browser-boundary">
-          <span>Browser session</span>
+      <section className="m0-challenge" aria-labelledby="m0-challenge-title">
+        <div className="m0-challenge-copy">
+          <span className="eyebrow">M0 CHALLENGE · SERVER WEB APP</span>
+          <h2 id="m0-challenge-title">Move the misplaced Client</h2>
+          <p>
+            The Client starts in Browser session, but this scenario uses a server-side Client. Move
+            it into <strong>Trusted application</strong>, where transaction state and the code
+            exchange stay off the browser.
+          </p>
         </div>
-        <div className="boundary server-boundary">
-          <span>Server trust boundary</span>
-        </div>
-        <div className="route front">
-          <span>① front channel · redirect</span>
-        </div>
-        <div className="route back">
-          <span>② back channel · TLS</span>
-        </div>
-        <div className="actor-grid">
-          {ACTORS.map((actor) => (
-            <button
-              key={actor.id}
-              className={`actor actor-${actor.id} ${selected === actor.id ? 'selected' : ''}`}
-              aria-pressed={selected === actor.id}
-              onClick={() => {
-                setSelected(actor.id);
-                announce(`${actor.name}, selected, ${zones[actor.id]}.`);
+        <div className="placement-editor" aria-label="Selected actor placement">
+          <div className="selected-actor-summary">
+            <span>1 · SELECTED ACTOR</span>
+            <strong>{selectedActor.name}</strong>
+            <small>Currently: {zones[selected]}</small>
+          </div>
+          <label htmlFor="actor-zone">
+            <span>2 · CHOOSE ITS ZONE</span>
+            Choose a zone for {selectedActor.name}
+            <select
+              id="actor-zone"
+              value={zones[selected]}
+              onChange={(event) => {
+                const zone = event.target.value;
+                setZones((current) => ({ ...current, [selected]: zone }));
+                setChecks([]);
+                setLastResult(null);
+                onResult(false);
+                announce(`${selectedActor.name} moved to ${zone}.`);
               }}
             >
-              <span className="actor-mark" aria-hidden="true">
-                {actor.mark}
-              </span>
-              <span className="actor-name">{actor.name}</span>
-              <small className="actor-zone">{zones[actor.id]}</small>
+              {TRUST_ZONES.map((zone) => (
+                <option key={zone.id}>{zone.id}</option>
+              ))}
+            </select>
+          </label>
+          <div className="placement-check">
+            <span className={misplacedCount === 0 ? 'ready' : ''} aria-live="polite">
+              {misplacedCount === 0
+                ? 'All placements ready to check'
+                : `${misplacedCount} placement${misplacedCount === 1 ? '' : 's'} to fix`}
+            </span>
+            <button
+              className="secondary"
+              aria-expanded={hintVisible}
+              onClick={() => setHintVisible((visible) => !visible)}
+            >
+              {hintVisible ? 'Hide hint' : 'Show hint'}
             </button>
-          ))}
+            <RunButton onClick={checkMap}>3 · Check placements</RunButton>
+          </div>
         </div>
+        {lastResult && (
+          <div
+            className={`m0-result ${lastResult.replace(' ', '-')}`}
+            role="status"
+            aria-label="M0 result"
+          >
+            <strong>{lastResult === 'passed' ? 'M0 passed' : 'Map needs repair'}</strong>
+            <span>
+              {lastResult === 'passed'
+                ? 'All six actors are in the correct trust zones.'
+                : `${misplacedCount} placement${misplacedCount === 1 ? '' : 's'} still need repair. The first incorrect actor is selected.`}
+            </span>
+          </div>
+        )}
+        {hintVisible && (
+          <p className="m0-hint" role="note">
+            Browser session contains the person and user agent. The server-side Client belongs in
+            Trusted application. The OP, API, and attacker each keep their named boundary.
+          </p>
+        )}
+      </section>
+
+      <div
+        className="trust-zone-map"
+        role="group"
+        aria-label="Trust zones. Actor cards move between zones when their placement changes."
+      >
+        {TRUST_ZONES.map((zone, zoneIndex) => {
+          const zoneActors = ACTORS.filter((actor) => zones[actor.id] === zone.id);
+          return (
+            <section
+              key={zone.id}
+              className={`trust-zone trust-zone-${zoneIndex + 1}`}
+              aria-label={`${zone.label} zone`}
+            >
+              <header>
+                <span>{String(zoneIndex + 1).padStart(2, '0')}</span>
+                <div>
+                  <strong>{zone.label}</strong>
+                  <p>{zone.detail}</p>
+                </div>
+              </header>
+              <div className="zone-actors">
+                {zoneActors.map((actor) => (
+                  <button
+                    key={actor.id}
+                    className={`actor actor-${actor.id} ${selected === actor.id ? 'selected' : ''}`}
+                    aria-pressed={selected === actor.id}
+                    onClick={() => {
+                      setSelected(actor.id);
+                      announce(`${actor.name}, selected, ${zones[actor.id]}.`);
+                    }}
+                  >
+                    <span className="actor-mark" aria-hidden="true">
+                      {actor.mark}
+                    </span>
+                    <span className="actor-name">{actor.name}</span>
+                    <small className="actor-zone">{zones[actor.id]}</small>
+                  </button>
+                ))}
+                {zoneActors.length === 0 && (
+                  <span className="empty-zone">No actor placed here yet.</span>
+                )}
+              </div>
+            </section>
+          );
+        })}
       </div>
-      <div className="channel-legend" aria-label="Channel legend">
-        <span>
-          <i className="front-key" aria-hidden="true" /> Front channel · browser redirect
-        </span>
-        <span>
-          <i className="back-key" aria-hidden="true" /> Back channel · direct TLS exchange
-        </span>
-      </div>
-      <div className="move-control">
-        <label htmlFor="actor-zone">
-          Move {ACTORS.find((actor) => actor.id === selected)?.name} to zone
-        </label>
-        <select
-          id="actor-zone"
-          value={zones[selected]}
-          onChange={(event) => {
-            setZones({ ...zones, [selected]: event.target.value });
-            announce(`${selected} moved to ${event.target.value}.`);
-          }}
-        >
-          <option>Browser session</option>
-          <option>Trusted application</option>
-          <option>Issuer boundary</option>
-          <option>Resource boundary</option>
-          <option>Untrusted network</option>
-        </select>
-      </div>
+
+      <section className="channel-story" aria-label="How the channels cross these zones">
+        <div>
+          <span>① FRONT CHANNEL · BROWSER REDIRECT</span>
+          <strong>Client → User Agent → OP → User Agent → Client</strong>
+          <p>The browser carries the authorization request and callback. Treat it as observable.</p>
+        </div>
+        <div>
+          <span>② BACK CHANNEL · DIRECT TLS</span>
+          <strong>Client ↔ Authorization Server / OP</strong>
+          <p>
+            The server-side Client redeems the one-time code without routing through the browser.
+          </p>
+        </div>
+      </section>
       <ResultTable checks={checks} title="Trust-map evidence" />
     </div>
   );
@@ -2036,6 +2163,9 @@ export function App() {
   const [view, setView] = useState<'guide' | 'practice'>('guide');
   const [active, setActive] = useState<MilestoneId>('M0');
   const { progress, setProgress, mark } = useProgress();
+  const [trustZones, setTrustZones] = useState<Record<string, string>>(() =>
+    loadTrustZones(progress.M0 === 'passed'),
+  );
   const [announcement, setAnnouncement] = useState(
     'Workbench ready. Synthetic local fixtures loaded.',
   );
@@ -2059,6 +2189,9 @@ export function App() {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem('protocol-workbench-theme', theme);
   }, [theme]);
+  useEffect(() => {
+    localStorage.setItem(TRUST_ZONE_STORAGE_KEY, JSON.stringify(trustZones));
+  }, [trustZones]);
   useEffect(() => {
     if (view === 'practice' && !progress[active]) mark(active, 'in progress');
   }, [active, view]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -2240,9 +2373,29 @@ export function App() {
                 </div>
               </div>
             </section>
+            <section
+              className="exercise-brief"
+              aria-label={`Exercise instructions for ${milestone.id}`}
+            >
+              <div className="exercise-brief-lead">
+                <span className="eyebrow">EXERCISE · YOUR TURN</span>
+                <strong>Your task</strong>
+                <p>{milestone.prompt}</p>
+              </div>
+              <div className="exercise-brief-step">
+                <span>HOW TO DO IT</span>
+                <p>{milestone.action}</p>
+              </div>
+              <div className="exercise-brief-step success">
+                <span>PASS WHEN</span>
+                <p>{milestone.success}</p>
+              </div>
+            </section>
             <section className="bench-surface" aria-label={`${milestone.title} interactive bench`}>
               {active === 'M0' && (
                 <TrustMap
+                  zones={trustZones}
+                  setZones={setTrustZones}
                   onResult={(passed) => recordResult('M0', passed)}
                   announce={setAnnouncement}
                 />
@@ -2364,6 +2517,7 @@ export function App() {
                 disabled={resetPhrase !== 'RESET LOCAL'}
                 onClick={() => {
                   setProgress({});
+                  setTrustZones(initialTrustZones());
                   closeReset();
                   setAnnouncement('All local progress reset.');
                 }}

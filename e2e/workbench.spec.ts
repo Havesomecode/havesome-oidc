@@ -108,8 +108,7 @@ test('makes the field cheat sheet easy to reach and download', async ({ page }) 
 
 test('supports scenario keyboard controls and resets the workflow', async ({ page }) => {
   const server = page.getByRole('tab', { name: 'Server web app' });
-  await server.focus();
-  await page.keyboard.press('ArrowRight');
+  await server.press('ArrowRight');
   const spa = page.getByRole('tab', { name: 'Browser SPA' });
   await expect(spa).toBeFocused();
   await expect(spa).toHaveAttribute('aria-selected', 'true');
@@ -183,10 +182,22 @@ test('keeps first-run orientation and M0 lanes readable on mobile', async ({
   ).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Guided learning sections' })).toBeVisible();
   await enterPractice(page);
-  await expect(page.getByText('1. Select an actor')).toBeVisible();
-  await expect(page.locator('.actor-zone').first()).toBeVisible();
-  await expect(page.locator('.channel-legend')).toBeVisible();
-  await expect(page.locator('.browser-boundary')).toBeHidden();
+  const instructions = page.getByRole('region', { name: /Exercise instructions for M0/i });
+  await expect(instructions).toBeVisible();
+  await expect(instructions).toContainText('Your task');
+  await expect(instructions).toContainText(/how to do it/i);
+  await expect(instructions).toContainText(/pass when/i);
+  await expect(page.getByRole('heading', { name: 'Move the misplaced Client' })).toBeVisible();
+
+  const map = page.getByRole('group', { name: /Trust zones/ });
+  const browserZone = map.getByRole('region', { name: /Browser session zone/i });
+  const trustedZone = map.getByRole('region', { name: /Trusted application zone/i });
+  await expect(browserZone.getByRole('button', { name: /Client/ })).toBeVisible();
+  await page.getByLabel(/Choose a zone for Client/).selectOption('Trusted application');
+  await expect(trustedZone.getByRole('button', { name: /Client/ })).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: /How the channels cross these zones/i }),
+  ).toBeVisible();
   await expect(page.locator('.mobile-switcher')).toHaveCSS('position', 'static');
   await expect
     .poll(() =>
@@ -195,6 +206,27 @@ test('keeps first-run orientation and M0 lanes readable on mobile', async ({
       ),
     )
     .toBe(true);
+});
+
+test('puts an explicit exercise contract before every milestone work area', async ({ page }) => {
+  await enterPractice(page);
+  for (const id of ['M0', 'M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7']) {
+    await milestone(page, id).click();
+    const instructions = page.getByRole('region', {
+      name: new RegExp(`Exercise instructions for ${id}`, 'i'),
+    });
+    await expect(instructions).toBeVisible();
+    await expect(instructions.getByText('Your task', { exact: true })).toBeVisible();
+    await expect(instructions.getByText('HOW TO DO IT', { exact: true })).toBeVisible();
+    await expect(instructions.getByText('PASS WHEN', { exact: true })).toBeVisible();
+    const order = await page.evaluate(() => ({
+      instructionsBottom: document.querySelector('.exercise-brief')!.getBoundingClientRect().bottom,
+      workAreaTop: document.querySelector('.bench-surface')!.getBoundingClientRect().top,
+    }));
+    expect(order.instructionsBottom, `${id} instructions precede controls`).toBeLessThanOrEqual(
+      order.workAreaTop,
+    );
+  }
 });
 
 test('keeps visible controls at 44px and 48px on coarse pointers', async ({
@@ -276,8 +308,19 @@ test('keeps the simulation local, accessible, and explicit about decode limits',
 test('completes every milestone with pointer-free controls available', async ({ page }) => {
   test.slow();
   await enterPractice(page);
-  await page.getByLabel(/Move Client to zone/).selectOption('Trusted application');
-  await page.getByRole('button', { name: 'Check map' }).click();
+  await page.getByLabel(/Choose a zone for Client/).selectOption('Trusted application');
+  await page.getByRole('button', { name: /Check placements/ }).click();
+  await expect(page.getByText('M0 · PASSED')).toBeVisible();
+
+  await milestone(page, 'M1').click();
+  await milestone(page, 'M0').click();
+  const revisitedMap = page.getByRole('group', { name: /Trust zones/ });
+  await expect(
+    revisitedMap
+      .getByRole('region', { name: /Trusted application zone/i })
+      .getByRole('button', { name: /Client/ }),
+  ).toBeVisible();
+  await expect(page.getByRole('status', { name: 'M0 result' })).toBeHidden();
   await expect(page.getByText('M0 · PASSED')).toBeVisible();
 
   await milestone(page, 'M1').click();

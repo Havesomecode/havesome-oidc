@@ -116,17 +116,51 @@ describe('Protocol Workbench', () => {
 
     await user.click(screen.getByRole('button', { name: /enter practice lab/i }));
     expect(screen.getByRole('heading', { name: 'Cast + trust map', level: 1 })).toBeVisible();
-    expect(screen.getByText(/1\. select an actor/i)).toBeVisible();
-    expect(screen.getByText(/2\. choose its zone/i)).toBeVisible();
-    expect(screen.getByText(/3\. check the map/i)).toBeVisible();
-    await user.click(screen.getByRole('button', { name: /check map/i }));
-    expect(screen.getByText('M0 · NEEDS REPAIR')).toBeVisible();
+
+    const exerciseBrief = screen.getByRole('region', { name: /exercise instructions for m0/i });
+    expect(within(exerciseBrief).getByText(/your task/i)).toBeVisible();
+    expect(within(exerciseBrief).getByText(/move the misplaced client/i)).toBeVisible();
+    expect(within(exerciseBrief).getByText(/how to do it/i)).toBeVisible();
+    expect(within(exerciseBrief).getByText(/pass when/i)).toBeVisible();
+
+    expect(
+      screen.getByRole('heading', { name: /move the misplaced client/i, level: 2 }),
+    ).toBeVisible();
+    expect(screen.getByText(/client starts in browser session/i)).toBeVisible();
+
+    const map = screen.getByRole('group', { name: /trust zones/i });
+    const browserZone = within(map).getByRole('region', { name: /browser session zone/i });
+    const trustedZone = within(map).getByRole('region', { name: /trusted application zone/i });
+    expect(within(browserZone).getByRole('button', { name: /client/i })).toBeVisible();
+
+    await user.selectOptions(
+      screen.getByLabelText(/choose a zone for client/i),
+      'Trusted application',
+    );
+    expect(within(trustedZone).getByRole('button', { name: /client/i })).toBeVisible();
+    await user.click(screen.getByRole('button', { name: /check placements/i }));
+    expect(screen.getByRole('status', { name: /m0 result/i })).toHaveTextContent(
+      /m0 passed.*all six actors/i,
+    );
+    expect(screen.getByText('M0 · PASSED')).toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: /^M1/ }));
+    await user.click(screen.getByRole('button', { name: /^M0/ }));
+    const revisitedMap = screen.getByRole('group', { name: /trust zones/i });
+    const revisitedTrustedZone = within(revisitedMap).getByRole('region', {
+      name: /trusted application zone/i,
+    });
+    expect(within(revisitedTrustedZone).getByRole('button', { name: /client/i })).toBeVisible();
+    expect(screen.getByText('M0 · PASSED')).toBeVisible();
 
     await user.click(screen.getByRole('button', { name: /learn the flow/i }));
     await user.click(screen.getByRole('button', { name: /jump to pkce practice/i }));
     expect(
       screen.getByRole('heading', { name: 'Authorization Code + PKCE', level: 1 }),
     ).toBeVisible();
+    expect(screen.getByRole('region', { name: /exercise instructions for m1/i })).toHaveTextContent(
+      /your task.*how to do it.*pass when/i,
+    );
   });
 
   it('shows the local-only and decode-only safety boundaries', () => {
@@ -179,15 +213,31 @@ describe('Protocol Workbench', () => {
     expect(screen.getAllByTestId('sequence-message')[1]).toHaveTextContent('GET /authorize');
   });
 
-  it('persists passed milestone progress locally', async () => {
+  it('persists passed milestone progress and its trust map locally', async () => {
     const user = userEvent.setup();
-    render(<App />);
+    const { unmount } = render(<App />);
     await user.click(screen.getByRole('button', { name: /enter practice lab/i }));
-    await user.selectOptions(screen.getByLabelText(/move client to zone/i), 'Trusted application');
-    await user.click(screen.getByRole('button', { name: /check map/i }));
+    await user.selectOptions(
+      screen.getByLabelText(/choose a zone for client/i),
+      'Trusted application',
+    );
+    await user.click(screen.getByRole('button', { name: /check placements/i }));
     expect(JSON.parse(localStorage.getItem('protocol-workbench-progress') ?? '{}').M0).toBe(
       'passed',
     );
+    await waitFor(() =>
+      expect(
+        JSON.parse(localStorage.getItem('protocol-workbench-trust-zones') ?? '{}').client,
+      ).toBe('Trusted application'),
+    );
+
+    unmount();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: /enter practice lab/i }));
+    const map = screen.getByRole('group', { name: /trust zones/i });
+    const trustedZone = within(map).getByRole('region', { name: /trusted application zone/i });
+    expect(within(trustedZone).getByRole('button', { name: /client/i })).toBeVisible();
+    expect(screen.getByText('M0 · PASSED')).toBeVisible();
   });
 
   it('regresses a failed gate and every passed downstream gate to needs repair', async () => {
@@ -200,6 +250,12 @@ describe('Protocol Workbench', () => {
     );
     render(<App />);
     await user.click(screen.getByRole('button', { name: /enter practice lab/i }));
+    const migratedMap = screen.getByRole('group', { name: /trust zones/i });
+    expect(
+      within(
+        within(migratedMap).getByRole('region', { name: /trusted application zone/i }),
+      ).getByRole('button', { name: /client/i }),
+    ).toBeVisible();
 
     await user.click(screen.getByRole('button', { name: /^M1/ }));
     await user.clear(screen.getByLabelText('code_verifier'));
