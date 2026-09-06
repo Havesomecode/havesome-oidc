@@ -167,6 +167,19 @@ describe('Protocol Workbench', () => {
     render(<App />);
     expect(screen.getByText(/synthetic · local/i)).toBeVisible();
     expect(screen.getByText(/no real credentials or tokens/i)).toBeVisible();
+    expect(screen.getByText(/anonymous page views.*cloudflare web analytics/i)).toBeVisible();
+  });
+
+  it('scopes the practice privacy claim to protocol data', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: /enter practice lab/i }));
+
+    expect(
+      screen.getByText(/protocol inputs, fixtures, and progress stay in this browser/i),
+    ).toBeVisible();
+    expect(screen.queryByText(/all interactions stay in this browser/i)).not.toBeInTheDocument();
   });
 
   it('offers all eight hands-on milestones and nine threat challenges', async () => {

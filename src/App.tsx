@@ -1733,8 +1733,9 @@ function GuidedLearning({
           <span className="status-dot" aria-hidden="true" />
           <strong>LOCAL FIXTURES ONLY</strong>
           <p>
-            Use fabricated values only. Everything stays in this browser, and decode examples never
-            verify signatures.
+            Use fabricated values only. Protocol inputs and simulation data stay in this browser;
+            decode examples never verify signatures. Anonymous page views are measured by Cloudflare
+            Web Analytics.
           </p>
         </aside>
       </section>
@@ -2292,7 +2293,7 @@ export function App() {
         </div>
         <div className="safety-boundary">
           <span className="status-dot" aria-hidden="true" /> <strong>SYNTHETIC · LOCAL</strong>
-          <span>No real credentials or tokens. No network calls.</span>
+          <span>No real credentials or tokens. Protocol data stays local.</span>
         </div>
         <div className="header-actions">
           <span className="progress-label">{passedCount}/8 gates</span>
@@ -2345,7 +2346,7 @@ export function App() {
               );
             })}
             <div className="rail-footer">
-              <span>All interactions stay in this browser.</span>
+              <span>Protocol inputs, fixtures, and progress stay in this browser.</span>
               <span>Progress uses localStorage only.</span>
             </div>
           </nav>

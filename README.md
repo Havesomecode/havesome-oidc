@@ -4,7 +4,8 @@ A static, local-only OAuth 2.0 and OpenID Connect learning instrument. Learners 
 
 ## Safety boundary
 
-- No login, analytics, API, issuer, or remote runtime dependency.
+- No login, API, issuer, or remote protocol runtime dependency. Cloudflare Web Analytics receives
+  anonymous page-view and performance metadata only; no protocol input or simulation data is sent.
 - Every fixture uses `*.local`, `api://notes`, and visibly synthetic identifiers.
 - JWT decoding is inspection only. The app never claims cryptographic signature verification.
 - Progress and preferences stay in browser `localStorage`.
